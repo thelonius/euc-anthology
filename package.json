@@ -1,0 +1,21 @@
+{
+  "name": "euc-anthology",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Моноколесо Изнутри — интерактивная антология реверс-инжиниринга прошивки EUC",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "echarts": "^6.0.0",
+    "papaparse": "^5.5.3",
+    "preact": "^10.29.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.4",
+    "vite": "^8.0.1"
+  }
+}
