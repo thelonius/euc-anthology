@@ -182,22 +182,170 @@ const AngleSim = () => {
 }
 
 // Visualizes back-EMF generation: rotating rotor induces sinusoidal voltage
-// in 3 stationary stator coils. Amplitude ∝ speed.
+// in stator coils. Two modes: schematic (1 bar magnet + 3 coils) and realistic
+// (48 magnets + 27 slots — как на реальном ET Max хаб-моторе).
+const MOTOR_CONFIG = {
+  poleCount: 24,       // magnetic poles on rotor
+  magnetCount: 48,     // 2 magnets per pole
+  slotCount: 27,       // stator slots (9 per phase, typical for 12 pole-pair hub motor)
+}
+const COIL_COLORS = ['#ff3366', '#33ff99', '#00ccff']
+const COIL_LABELS = ['A', 'B', 'C']
+
 const BackEMFSim = () => {
   const canvasRef = useRef(null)
   const [rpm, setRpm] = useState(400)
   const [showNoise, setShowNoise] = useState(true)
+  const [mode, setMode] = useState('schematic')  // 'schematic' or 'realistic'
   const rpmRef = useRef(400)
   const noiseRef = useRef(true)
+  const modeRef = useRef('schematic')
   useEffect(() => { rpmRef.current = rpm }, [rpm])
   useEffect(() => { noiseRef.current = showNoise }, [showNoise])
+  useEffect(() => { modeRef.current = mode }, [mode])
 
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     let animId, lastT = performance.now()
-    let rotorAngle = 0
+    let rotorAngleElec = 0     // electrical angle (used for EMF waveforms)
+    let rotorAngleMech = 0     // mechanical angle (used to draw rotor position)
     const hist = { t: 0, a: [], b: [], c: [] }
+
+    const drawSchematic = (cx, cy, R, rotorR, emfs) => {
+      // Stator circle
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx, cy, R + 15, 0, Math.PI * 2); ctx.stroke()
+
+      // Three coils at top, left-bottom, right-bottom
+      const coilAngles = [-Math.PI / 2, -Math.PI / 2 + 2 * Math.PI / 3, -Math.PI / 2 + 4 * Math.PI / 3]
+      coilAngles.forEach((a, i) => {
+        const px = cx + Math.cos(a) * (R + 15)
+        const py = cy + Math.sin(a) * (R + 15)
+        const intensity = Math.min(1, Math.abs(emfs[i]) / 80)
+        ctx.fillStyle = COIL_COLORS[i] + Math.floor(intensity * 200).toString(16).padStart(2, '0')
+        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill()
+        ctx.strokeStyle = COIL_COLORS[i]; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.stroke()
+        ctx.fillStyle = '#000'
+        ctx.font = 'bold 12px JetBrains Mono, monospace'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(COIL_LABELS[i], px, py)
+        ctx.fillStyle = COIL_COLORS[i]
+        ctx.font = '9px JetBrains Mono, monospace'
+        ctx.fillText(`${emfs[i].toFixed(0)}V`, px + Math.cos(a) * 22, py + Math.sin(a) * 22)
+      })
+
+      // Single bar magnet rotor
+      const rotorEnd = (dir) => ({
+        x: cx + Math.cos(rotorAngleElec + dir) * rotorR,
+        y: cy + Math.sin(rotorAngleElec + dir) * rotorR,
+      })
+      const nEnd = rotorEnd(0)
+      ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 8; ctx.lineCap = 'round'
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nEnd.x, nEnd.y); ctx.stroke()
+      ctx.fillStyle = '#ff3366'
+      ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('N', nEnd.x, nEnd.y)
+      const sEnd = rotorEnd(Math.PI)
+      ctx.strokeStyle = '#3366ff'; ctx.lineWidth = 8
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(sEnd.x, sEnd.y); ctx.stroke()
+      ctx.fillStyle = '#3366ff'; ctx.fillText('S', sEnd.x, sEnd.y)
+      ctx.fillStyle = '#1a1a1a'
+      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke()
+    }
+
+    const drawRealistic = (cx, cy, R, rotorR, emfs) => {
+      // Outer stator ring
+      const statorOuter = R + 22, statorInner = R
+      ctx.fillStyle = '#0f0f0f'
+      ctx.beginPath(); ctx.arc(cx, cy, statorOuter, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx, cy, statorOuter, 0, Math.PI * 2); ctx.stroke()
+      ctx.beginPath(); ctx.arc(cx, cy, statorInner, 0, Math.PI * 2); ctx.stroke()
+
+      // 27 stator slots (teeth) — each colored by phase
+      const { slotCount } = MOTOR_CONFIG
+      const slotAngleWidth = (2 * Math.PI / slotCount) * 0.7  // leave gaps between slots
+      for (let i = 0; i < slotCount; i++) {
+        const a0 = (i / slotCount) * 2 * Math.PI - Math.PI / 2 - slotAngleWidth / 2
+        const a1 = a0 + slotAngleWidth
+        const phase = i % 3
+        const color = COIL_COLORS[phase]
+        // Intensity proportional to |EMF| of this phase
+        const intensity = Math.min(1, Math.abs(emfs[phase]) / 80)
+        const alpha = 0.15 + intensity * 0.75
+        // Slot as an annular sector
+        ctx.beginPath()
+        ctx.arc(cx, cy, statorOuter - 2, a0, a1)
+        ctx.arc(cx, cy, statorInner + 1, a1, a0, true)
+        ctx.closePath()
+        ctx.fillStyle = color + Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fill()
+        ctx.strokeStyle = color + '66'; ctx.lineWidth = 0.5
+        ctx.stroke()
+      }
+
+      // Airgap annulus (thin dark band)
+      ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 2
+      ctx.beginPath(); ctx.arc(cx, cy, statorInner - 1, 0, Math.PI * 2); ctx.stroke()
+
+      // Rotor yoke (iron core of rotor)
+      ctx.fillStyle = '#1a1a1a'
+      ctx.beginPath(); ctx.arc(cx, cy, statorInner - 2, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx, cy, statorInner - 2, 0, Math.PI * 2); ctx.stroke()
+
+      // 48 magnets on rotor edge — grouped as NN-SS-NN-SS around circumference
+      const { magnetCount } = MOTOR_CONFIG
+      const magAngleWidth = (2 * Math.PI / magnetCount) * 0.85
+      const magOuter = statorInner - 3, magInner = statorInner - 11
+      for (let i = 0; i < magnetCount; i++) {
+        // Rotate with mechanical angle. Magnets grouped: floor(i/2) is pole index,
+        // even poles are N, odd are S.
+        const localAngle = (i / magnetCount) * 2 * Math.PI
+        const worldAngle = localAngle + rotorAngleMech - Math.PI / 2
+        const a0 = worldAngle - magAngleWidth / 2
+        const a1 = worldAngle + magAngleWidth / 2
+        const poleIdx = Math.floor(i / 2)
+        const isNorth = poleIdx % 2 === 0
+        const color = isNorth ? '#ff3366' : '#3366ff'
+
+        ctx.beginPath()
+        ctx.arc(cx, cy, magOuter, a0, a1)
+        ctx.arc(cx, cy, magInner, a1, a0, true)
+        ctx.closePath()
+        ctx.fillStyle = color
+        ctx.fill()
+        ctx.strokeStyle = isNorth ? '#cc1a4a' : '#1a4acc'; ctx.lineWidth = 0.5
+        ctx.stroke()
+      }
+
+      // Rotor shaft
+      ctx.fillStyle = '#0a0a0a'
+      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.stroke()
+
+      // Phase labels around the outside
+      COIL_LABELS.forEach((label, i) => {
+        // Each phase owns 9 slots; put label at the slot closest to its canonical position
+        const canonical = -Math.PI / 2 + i * (2 * Math.PI / 3)
+        const lx = cx + Math.cos(canonical) * (statorOuter + 12)
+        const ly = cy + Math.sin(canonical) * (statorOuter + 12)
+        ctx.fillStyle = COIL_COLORS[i]
+        ctx.font = 'bold 11px JetBrains Mono, monospace'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(label, lx, ly)
+        ctx.font = '9px JetBrains Mono, monospace'
+        ctx.fillText(`${emfs[i].toFixed(0)}V`, lx, ly + 14)
+      })
+
+      // Config caption
+      ctx.fillStyle = '#444'; ctx.font = '9px JetBrains Mono, monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText('24P / 27S · 48 магнитов', cx, cy + statorOuter + 36)
+    }
 
     const loop = (now) => {
       const dt = Math.min((now - lastT) / 1000, 0.04)
@@ -205,83 +353,36 @@ const BackEMFSim = () => {
       const pole_pairs = 12
       const omega_mech = (rpmRef.current / 60) * 2 * Math.PI
       const omega_elec = omega_mech * pole_pairs
-      rotorAngle += omega_elec * dt
-      rotorAngle %= 2 * Math.PI
+      rotorAngleElec += omega_elec * dt
+      rotorAngleElec %= 2 * Math.PI
+      rotorAngleMech += omega_mech * dt
+      rotorAngleMech %= 2 * Math.PI
 
       // Back-EMF magnitude ∝ speed. Peak at rpm=1500 ≈ 100V
-      const Ke = 100 / 1500   // V per RPM (normalised visual)
+      const Ke = 100 / 1500
       const peak = Ke * rpmRef.current
 
-      const emf_a = peak * Math.cos(rotorAngle)
-      const emf_b = peak * Math.cos(rotorAngle - 2 * Math.PI / 3)
-      const emf_c = peak * Math.cos(rotorAngle - 4 * Math.PI / 3)
+      const emf_a = peak * Math.cos(rotorAngleElec)
+      const emf_b = peak * Math.cos(rotorAngleElec - 2 * Math.PI / 3)
+      const emf_c = peak * Math.cos(rotorAngleElec - 4 * Math.PI / 3)
+      const emfs = [emf_a, emf_b, emf_c]
 
-      const noiseLevel = noiseRef.current ? 1.5 : 0  // constant V of ADC/shunt noise
+      const noiseLevel = noiseRef.current ? 1.5 : 0
       const n = () => (Math.random() - 0.5) * 2 * noiseLevel
       hist.t += dt
-      hist.a.push(emf_a + n())
-      hist.b.push(emf_b + n())
-      hist.c.push(emf_c + n())
+      hist.a.push(emf_a + n()); hist.b.push(emf_b + n()); hist.c.push(emf_c + n())
       if (hist.a.length > 200) { hist.a.shift(); hist.b.shift(); hist.c.shift() }
 
       const W = canvas.width, H = canvas.height
       ctx.clearRect(0, 0, W, H)
 
-      // --- Left: rotor + stator coils ---
+      // --- Left: rotor + stator (chosen mode) ---
       const cx = 140, cy = H / 2, R = 70, rotorR = 40
-
-      // Stator circle
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 1
-      ctx.beginPath(); ctx.arc(cx, cy, R + 15, 0, Math.PI * 2); ctx.stroke()
-
-      // Three coils at 0°, 120°, 240° (electrical 0 of phase A is at top)
-      const coilColors = ['#ff3366', '#33ff99', '#00ccff']
-      const coilLabels = ['A', 'B', 'C']
-      const coilAngles = [-Math.PI / 2, -Math.PI / 2 + 2 * Math.PI / 3, -Math.PI / 2 + 4 * Math.PI / 3]
-      const currentEmfs = [emf_a, emf_b, emf_c]
-      coilAngles.forEach((a, i) => {
-        const px = cx + Math.cos(a) * (R + 15)
-        const py = cy + Math.sin(a) * (R + 15)
-        // Highlight coil proportionally to abs(emf)
-        const intensity = Math.min(1, Math.abs(currentEmfs[i]) / 80)
-        ctx.fillStyle = coilColors[i] + Math.floor(intensity * 200).toString(16).padStart(2, '0')
-        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill()
-        ctx.strokeStyle = coilColors[i]; ctx.lineWidth = 2
-        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.stroke()
-        ctx.fillStyle = '#000'
-        ctx.font = 'bold 12px JetBrains Mono, monospace'
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-        ctx.fillText(coilLabels[i], px, py)
-        // Instantaneous EMF label
-        ctx.fillStyle = coilColors[i]
-        ctx.font = '9px JetBrains Mono, monospace'
-        const labelX = px + Math.cos(a) * 22
-        const labelY = py + Math.sin(a) * 22
-        ctx.fillText(`${currentEmfs[i].toFixed(0)}V`, labelX, labelY)
-      })
-
-      // Rotor with magnetic poles
-      const rotorEnd = (dir) => ({
-        x: cx + Math.cos(rotorAngle + dir) * rotorR,
-        y: cy + Math.sin(rotorAngle + dir) * rotorR,
-      })
-      // N pole (red)
-      const nEnd = rotorEnd(0)
-      ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 8; ctx.lineCap = 'round'
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nEnd.x, nEnd.y); ctx.stroke()
-      ctx.fillStyle = '#ff3366'
-      ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.fillText('N', nEnd.x, nEnd.y)
-      // S pole (blue)
-      const sEnd = rotorEnd(Math.PI)
-      ctx.strokeStyle = '#3366ff'; ctx.lineWidth = 8
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(sEnd.x, sEnd.y); ctx.stroke()
-      ctx.fillStyle = '#3366ff'
-      ctx.fillText('S', sEnd.x, sEnd.y)
-      // Rotor hub
-      ctx.fillStyle = '#1a1a1a'
-      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill()
-      ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke()
+      if (modeRef.current === 'realistic') {
+        drawRealistic(cx, cy, R, rotorR, emfs)
+      } else {
+        drawSchematic(cx, cy, R, rotorR, emfs)
+      }
 
       // --- Right: time-domain plot of EMFs ---
       const px0 = 280, pw = W - px0 - 10, ph = H - 40, py0 = 20
@@ -318,15 +419,15 @@ const BackEMFSim = () => {
         })
         ctx.stroke()
       }
-      drawPhase(hist.a, coilColors[0])
-      drawPhase(hist.b, coilColors[1])
-      drawPhase(hist.c, coilColors[2])
+      drawPhase(hist.a, COIL_COLORS[0])
+      drawPhase(hist.b, COIL_COLORS[1])
+      drawPhase(hist.c, COIL_COLORS[2])
 
       // Title + legend
       ctx.fillStyle = '#888'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'
       ctx.fillText('Фазные напряжения back-EMF во времени', px0 + 6, py0 - 6)
-      coilLabels.forEach((l, i) => {
-        ctx.fillStyle = coilColors[i]
+      COIL_LABELS.forEach((l, i) => {
+        ctx.fillStyle = COIL_COLORS[i]
         ctx.fillText(l, px0 + pw - 40 + i * 16, py0 - 6)
       })
 
@@ -344,8 +445,39 @@ const BackEMFSim = () => {
 
   return (
     <div>
-      <canvas ref={canvasRef} width={780} height={220}
-        style={{ width: '100%', height: '220px', background: '#080808', borderRadius: '8px', display: 'block' }} />
+      {/* Mode switcher */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ fontSize: '9px', color: '#444', letterSpacing: '2px' }}>
+          ПРЕДСТАВЛЕНИЕ МОТОРА
+        </div>
+        <div style={{ display: 'flex', gap: '4px', background: '#0a0a0a', padding: '3px', borderRadius: '6px', border: '1px solid #1e1e1e' }}>
+          <button onClick={() => setMode('schematic')}
+            style={{
+              padding: '6px 14px',
+              background: mode === 'schematic' ? '#00ccff22' : 'transparent',
+              border: `1px solid ${mode === 'schematic' ? '#00ccff44' : 'transparent'}`,
+              borderRadius: '4px',
+              color: mode === 'schematic' ? '#00ccff' : '#555',
+              cursor: 'pointer', fontSize: '11px', fontWeight: '700',
+            }}>
+            Схема · 1 магнит + 3 катушки
+          </button>
+          <button onClick={() => setMode('realistic')}
+            style={{
+              padding: '6px 14px',
+              background: mode === 'realistic' ? '#33ff9922' : 'transparent',
+              border: `1px solid ${mode === 'realistic' ? '#33ff9944' : 'transparent'}`,
+              borderRadius: '4px',
+              color: mode === 'realistic' ? '#33ff99' : '#555',
+              cursor: 'pointer', fontSize: '11px', fontWeight: '700',
+            }}>
+            Реальность · 48 магнитов + 27 слотов
+          </button>
+        </div>
+      </div>
+
+      <canvas ref={canvasRef} width={780} height={240}
+        style={{ width: '100%', height: '240px', background: '#080808', borderRadius: '8px', display: 'block' }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', marginTop: '14px', alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -363,7 +495,10 @@ const BackEMFSim = () => {
         </button>
       </div>
       <div style={{ marginTop: '14px', fontSize: '11px', color: '#444', lineHeight: 1.6 }}>
-        Амплитуда back-EMF пропорциональна скорости ротора. На низких RPM сигнал тонет в полосе шума АЦП (оранжевая область) — наблюдатель не может вычислить угол. При ~200 RPM и выше SNR становится достаточным для устойчивой работы.
+        {mode === 'schematic'
+          ? 'Схематический вид: 1 магнит ротора и 3 катушки — удобно для понимания физики, как связаны вращение и синусоиды фаз.'
+          : 'Реальная геометрия ET Max: 48 магнитов на роторе (12 пар полюсов), 27 слотов статора (9 на фазу). Электрический угол меняется в 12 раз быстрее механического — ротор проворачивается на 1 пару полюсов → полная синусоида на выходе.'}
+        {' '}Амплитуда back-EMF пропорциональна скорости: при ~200 RPM и выше SNR достаточен для устойчивой работы наблюдателя.
       </div>
     </div>
   )
