@@ -181,6 +181,194 @@ const AngleSim = () => {
   )
 }
 
+// Visualizes back-EMF generation: rotating rotor induces sinusoidal voltage
+// in 3 stationary stator coils. Amplitude ∝ speed.
+const BackEMFSim = () => {
+  const canvasRef = useRef(null)
+  const [rpm, setRpm] = useState(400)
+  const [showNoise, setShowNoise] = useState(true)
+  const rpmRef = useRef(400)
+  const noiseRef = useRef(true)
+  useEffect(() => { rpmRef.current = rpm }, [rpm])
+  useEffect(() => { noiseRef.current = showNoise }, [showNoise])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    let animId, lastT = performance.now()
+    let rotorAngle = 0
+    const hist = { t: 0, a: [], b: [], c: [] }
+
+    const loop = (now) => {
+      const dt = Math.min((now - lastT) / 1000, 0.04)
+      lastT = now
+      const pole_pairs = 12
+      const omega_mech = (rpmRef.current / 60) * 2 * Math.PI
+      const omega_elec = omega_mech * pole_pairs
+      rotorAngle += omega_elec * dt
+      rotorAngle %= 2 * Math.PI
+
+      // Back-EMF magnitude ∝ speed. Peak at rpm=1500 ≈ 100V
+      const Ke = 100 / 1500   // V per RPM (normalised visual)
+      const peak = Ke * rpmRef.current
+
+      const emf_a = peak * Math.cos(rotorAngle)
+      const emf_b = peak * Math.cos(rotorAngle - 2 * Math.PI / 3)
+      const emf_c = peak * Math.cos(rotorAngle - 4 * Math.PI / 3)
+
+      const noiseLevel = noiseRef.current ? 1.5 : 0  // constant V of ADC/shunt noise
+      const n = () => (Math.random() - 0.5) * 2 * noiseLevel
+      hist.t += dt
+      hist.a.push(emf_a + n())
+      hist.b.push(emf_b + n())
+      hist.c.push(emf_c + n())
+      if (hist.a.length > 200) { hist.a.shift(); hist.b.shift(); hist.c.shift() }
+
+      const W = canvas.width, H = canvas.height
+      ctx.clearRect(0, 0, W, H)
+
+      // --- Left: rotor + stator coils ---
+      const cx = 140, cy = H / 2, R = 70, rotorR = 40
+
+      // Stator circle
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx, cy, R + 15, 0, Math.PI * 2); ctx.stroke()
+
+      // Three coils at 0°, 120°, 240° (electrical 0 of phase A is at top)
+      const coilColors = ['#ff3366', '#33ff99', '#00ccff']
+      const coilLabels = ['A', 'B', 'C']
+      const coilAngles = [-Math.PI / 2, -Math.PI / 2 + 2 * Math.PI / 3, -Math.PI / 2 + 4 * Math.PI / 3]
+      const currentEmfs = [emf_a, emf_b, emf_c]
+      coilAngles.forEach((a, i) => {
+        const px = cx + Math.cos(a) * (R + 15)
+        const py = cy + Math.sin(a) * (R + 15)
+        // Highlight coil proportionally to abs(emf)
+        const intensity = Math.min(1, Math.abs(currentEmfs[i]) / 80)
+        ctx.fillStyle = coilColors[i] + Math.floor(intensity * 200).toString(16).padStart(2, '0')
+        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.fill()
+        ctx.strokeStyle = coilColors[i]; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI * 2); ctx.stroke()
+        ctx.fillStyle = '#000'
+        ctx.font = 'bold 12px JetBrains Mono, monospace'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(coilLabels[i], px, py)
+        // Instantaneous EMF label
+        ctx.fillStyle = coilColors[i]
+        ctx.font = '9px JetBrains Mono, monospace'
+        const labelX = px + Math.cos(a) * 22
+        const labelY = py + Math.sin(a) * 22
+        ctx.fillText(`${currentEmfs[i].toFixed(0)}V`, labelX, labelY)
+      })
+
+      // Rotor with magnetic poles
+      const rotorEnd = (dir) => ({
+        x: cx + Math.cos(rotorAngle + dir) * rotorR,
+        y: cy + Math.sin(rotorAngle + dir) * rotorR,
+      })
+      // N pole (red)
+      const nEnd = rotorEnd(0)
+      ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 8; ctx.lineCap = 'round'
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nEnd.x, nEnd.y); ctx.stroke()
+      ctx.fillStyle = '#ff3366'
+      ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('N', nEnd.x, nEnd.y)
+      // S pole (blue)
+      const sEnd = rotorEnd(Math.PI)
+      ctx.strokeStyle = '#3366ff'; ctx.lineWidth = 8
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(sEnd.x, sEnd.y); ctx.stroke()
+      ctx.fillStyle = '#3366ff'
+      ctx.fillText('S', sEnd.x, sEnd.y)
+      // Rotor hub
+      ctx.fillStyle = '#1a1a1a'
+      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke()
+
+      // --- Right: time-domain plot of EMFs ---
+      const px0 = 280, pw = W - px0 - 10, ph = H - 40, py0 = 20
+
+      // Grid + zero line
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1
+      for (const v of [-100, -50, 0, 50, 100]) {
+        const y = py0 + ph / 2 - (v / 120) * (ph / 2 - 6)
+        ctx.beginPath(); ctx.moveTo(px0, y); ctx.lineTo(px0 + pw, y); ctx.stroke()
+        ctx.fillStyle = '#333'; ctx.font = '9px JetBrains Mono, monospace'
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
+        ctx.fillText(`${v}V`, px0 - 4, y)
+      }
+
+      // Noise floor band (visual cue)
+      if (noiseRef.current) {
+        const nY1 = py0 + ph / 2 - (noiseLevel / 120) * (ph / 2 - 6)
+        const nY2 = py0 + ph / 2 + (noiseLevel / 120) * (ph / 2 - 6)
+        ctx.fillStyle = '#ff993318'
+        ctx.fillRect(px0, nY1, pw, nY2 - nY1)
+        ctx.fillStyle = '#ff9933'
+        ctx.font = '9px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+        ctx.fillText('шум АЦП / датчиков', px0 + 6, nY1 - 6)
+      }
+
+      // Draw 3 phase EMFs
+      const drawPhase = (arr, color) => {
+        ctx.strokeStyle = color; ctx.lineWidth = 1.8
+        ctx.beginPath()
+        arr.forEach((v, i) => {
+          const x = px0 + (i / 200) * pw
+          const y = py0 + ph / 2 - (v / 120) * (ph / 2 - 6)
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        })
+        ctx.stroke()
+      }
+      drawPhase(hist.a, coilColors[0])
+      drawPhase(hist.b, coilColors[1])
+      drawPhase(hist.c, coilColors[2])
+
+      // Title + legend
+      ctx.fillStyle = '#888'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'
+      ctx.fillText('Фазные напряжения back-EMF во времени', px0 + 6, py0 - 6)
+      coilLabels.forEach((l, i) => {
+        ctx.fillStyle = coilColors[i]
+        ctx.fillText(l, px0 + pw - 40 + i * 16, py0 - 6)
+      })
+
+      // Amplitude readout
+      ctx.fillStyle = '#555'
+      ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'left'
+      const snr = peak / Math.max(0.1, noiseLevel)
+      ctx.fillText(`пик: ${peak.toFixed(1)} V  ·  SNR: ${snr.toFixed(1)}x`, px0 + 6, H - 6)
+
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
+  }, [])
+
+  return (
+    <div>
+      <canvas ref={canvasRef} width={780} height={220}
+        style={{ width: '100%', height: '220px', background: '#080808', borderRadius: '8px', display: 'block' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', marginTop: '14px', alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <label style={{ fontSize: '10px', color: '#555' }}>Скорость ротора</label>
+            <span style={{ fontSize: '10px', color: '#00ccff', fontWeight: '700', fontFamily: 'JetBrains Mono, monospace' }}>
+              {rpm} RPM · ~{(rpm * 0.254 * 2 * Math.PI / 60 / 12 * 3.6).toFixed(1)} км/ч
+            </span>
+          </div>
+          <input type="range" min="10" max="1500" step="10" value={rpm} onChange={e => setRpm(+e.target.value)}
+            style={{ width: '100%', accentColor: '#00ccff' }} />
+        </div>
+        <button onClick={() => setShowNoise(!showNoise)}
+          style={{ padding: '8px 14px', background: showNoise ? '#ff993322' : '#1a1a1a', border: `1px solid ${showNoise ? '#ff993344' : '#333'}`, borderRadius: '6px', color: showNoise ? '#ff9933' : '#666', cursor: 'pointer', fontSize: '10px', fontWeight: '700' }}>
+          {showNoise ? 'Шум включён' : 'Шум выключен'}
+        </button>
+      </div>
+      <div style={{ marginTop: '14px', fontSize: '11px', color: '#444', lineHeight: 1.6 }}>
+        Амплитуда back-EMF пропорциональна скорости ротора. На низких RPM сигнал тонет в полосе шума АЦП (оранжевая область) — наблюдатель не может вычислить угол. При ~200 RPM и выше SNR становится достаточным для устойчивой работы.
+      </div>
+    </div>
+  )
+}
+
 export default function FluxObserverChapter() {
   return (
     <ChapterLayout eyebrow="Глава IX" title="Наблюдатель" subtitle="Flux Observer и почему Hall-датчики недостаточны">
@@ -199,7 +387,17 @@ export default function FluxObserverChapter() {
 
       <Section title="Как работает наблюдатель">
         <Prose>
-          Идея: у вращающегося мотора в обмотках наводится back-EMF — напряжение, пропорциональное скорости и повёрнутое относительно магнитного потока ротора. Если измерять фазные напряжения и токи, можно вычислить поток:
+          Идея: у вращающегося мотора в обмотках наводится back-EMF — напряжение, пропорциональное скорости и повёрнутое относительно магнитного потока ротора. Когда N-полюс ротора проходит мимо катушки фазы A, магнитный поток через неё меняется максимально быстро, и по закону Фарадея наводится максимальное напряжение. Три катушки разнесены на 120°, поэтому получаются три синусоиды со сдвигом фаз.
+        </Prose>
+      </Section>
+
+      <InteractivePanel title="Генерация back-EMF · как вращение становится напряжением">
+        <BackEMFSim />
+      </InteractivePanel>
+
+      <Section title="Интеграл потока">
+        <Prose>
+          Имея три фазных напряжения, можно восстановить угол ротора: поток — это интеграл back-EMF, а направление вектора потока в α/β-плоскости совпадает с ориентацией магнита ротора. Формально:
         </Prose>
         <CodeBlock
           label="Flux Observer · математика"
