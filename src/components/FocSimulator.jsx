@@ -33,9 +33,6 @@ const FocSimulator = () => {
   const runRef = useRef(false)
   useEffect(() => { leanRef.current = leanAngle }, [leanAngle])
   useEffect(() => { runRef.current = running }, [running])
-  if (typeof window !== 'undefined') {
-    window.__focDebug = { leanRef, runRef, running, leanAngle }
-  }
 
   const stateRef = useRef({
     id: 0, iq: 0, vd: 0, vq: 0,
@@ -45,7 +42,6 @@ const FocSimulator = () => {
     omega_elec: 0, angle_elec: 0, omega_mech: 0,
     history: [], lastTime: performance.now(),
   })
-  if (typeof window !== 'undefined') window.__focState = stateRef.current
 
   const chartRef = useRef(null)
   const vectorRef = useRef(null)
@@ -137,9 +133,7 @@ const FocSimulator = () => {
   // Physics loop
   useEffect(() => {
     let animId, fc = 0
-    if (typeof window !== 'undefined') window.__focLoopStarted = (window.__focLoopStarted || 0) + 1
     const loop = (t) => {
-      if (typeof window !== 'undefined') window.__focFrames = (window.__focFrames || 0) + 1
       const dt_f = Math.max(0.001, Math.min((t - stateRef.current.lastTime) / 1000, 0.05))
       stateRef.current.lastTime = t
       const s = stateRef.current
