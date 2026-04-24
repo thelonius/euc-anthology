@@ -1,6 +1,7 @@
 import { h } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { ChapterLayout, Prose, Callout, Section } from '../components/ChapterLayout'
+import { wrapTerms } from '../glossary/wrapTerms'
 
 const PendulumCanvas = () => {
   const canvasRef = useRef(null)
@@ -124,13 +125,28 @@ const PendulumCanvas = () => {
 export default function Prologue() {
   return (
     <ChapterLayout eyebrow="Пролог" title="Падение" subtitle="Почему моноколесо едет">
+      {/* Epigraph */}
+      <div style={{
+        borderLeft: '2px solid #2a2a2a',
+        padding: '6px 0 6px 20px',
+        margin: '0 0 40px 2px',
+        maxWidth: '560px',
+      }}>
+        <div style={{ fontSize: '16px', color: '#aaa', fontStyle: 'italic', lineHeight: 1.6, marginBottom: '8px' }}>
+          «Дух крутит кручину, как ноги — педали.»
+        </div>
+        <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.5px' }}>
+          Виктор Пелевин, <em>A Sinistra</em> (2025)
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '48px', alignItems: 'start', marginBottom: '48px' }}>
         <div>
           <Prose>
             Моноколесо — штука сомнительная с точки зрения классической механики. У него одна точка опоры, нет руля, нет педалей в обычном смысле. Оно обязано падать. Тем не менее, на нём ездят.
           </Prose>
           <Prose>
-            Работает это так: внутри корпуса стоит ARM-процессор (STM32F405), к нему по SPI подключён IMU на 1 МГц. Процессор 20 000 раз в секунду читает угол наклона с IMU и пересчитывает ток в обмотках мотора. Если наклон вперёд — мотор получает больше тока и подкатывается вперёд. Если назад — тормозит.
+            Работает это так: внутри корпуса стоит ARM-процессор (STM32F405), к нему по SPI подключён IMU на 1 МГц. Процессор 20 000 раз в секунду читает угол наклона с IMU и решает, куда и сколько тока подать в каждую из трёх обмоток мотора. Наклон вперёд — момент вперёд, колесо катится под райдера. Наклон назад — момент назад: тормозит в движении или едет задом с места.
           </Prose>
           <Prose>
             Интересное место здесь одно: вся «магия баланса» — это несколько килобайт кода на C, компилятор gcc-arm и пара коэффициентов Kp и Kd в SRAM по адресу 0x200000CC. Больше там ничего нет.
@@ -175,7 +191,7 @@ export default function Prologue() {
             {part && <div style={{ fontSize: '9px', color: '#333', letterSpacing: '3px', marginTop: '18px', marginBottom: '6px', textTransform: 'uppercase' }}>{part}</div>}
             <div style={{ display: 'flex', gap: '20px', padding: '10px 0', borderBottom: '1px solid #141414', alignItems: 'baseline' }}>
               <div style={{ fontSize: '12px', fontWeight: '700', color: '#bbb', minWidth: '150px' }}>{title}</div>
-              <div style={{ fontSize: '13px', color: '#555' }}>{desc}</div>
+              <div style={{ fontSize: '13px', color: '#555' }}>{wrapTerms(desc)}</div>
             </div>
           </div>
         ))}
