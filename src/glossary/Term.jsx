@@ -2,9 +2,9 @@ import { h } from 'preact'
 import { useState, useRef, useEffect } from 'preact/hooks'
 import { GLOSSARY } from './glossary'
 
-export const Term = ({ term }) => {
+export const Term = ({ term, children, style: styleOverride }) => {
   const def = GLOSSARY[term]
-  if (!def) return term
+  if (!def) return children ?? term
 
   const [hover, setHover] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -95,8 +95,9 @@ export const Term = ({ term }) => {
         cursor: 'help',
         color: pinned ? '#00ccff' : 'inherit',
         transition: 'border-color 0.15s, color 0.15s',
+        ...(styleOverride || {}),
       }}>
-      {term}
+      {children ?? term}
       {show && (
         <span
           ref={tipRef}

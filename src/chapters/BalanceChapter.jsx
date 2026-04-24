@@ -3,6 +3,110 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { ChapterLayout, Section, Prose, Callout, InteractivePanel } from '../components/ChapterLayout'
 import { CodeBlock, InlineCode } from '../components/CodeBlock'
 
+// Interactive formula — each symbol has hover tooltip explaining physics + code mapping
+const SymbolTip = ({ label, tip, color = '#00ccff', mono = true }) => {
+  const [hover, setHover] = useState(false)
+  const [pinned, setPinned] = useState(false)
+  const show = hover || pinned
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => { e.stopPropagation(); setPinned(p => !p) }}>
+      <span style={{
+        fontFamily: mono ? "'JetBrains Mono', monospace" : 'Georgia, serif',
+        fontStyle: mono ? 'normal' : 'italic',
+        color: show ? color : '#ddd',
+        padding: '2px 4px',
+        borderBottom: `1px dotted ${show ? color : '#555'}`,
+        cursor: 'help',
+        transition: 'all 0.15s',
+        fontWeight: show ? 700 : 500,
+      }}>
+        {label}
+      </span>
+      {show && (
+        <span style={{
+          position: 'absolute',
+          top: 'calc(100% + 8px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#0d0d0d',
+          border: `1px solid ${color}55`,
+          borderRadius: '8px',
+          padding: '12px 14px',
+          width: '260px',
+          fontSize: '12px',
+          lineHeight: 1.6,
+          color: '#bbb',
+          zIndex: 100,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          cursor: 'default',
+          textAlign: 'left',
+          fontFamily: "'Inter', sans-serif",
+          fontWeight: 400,
+          fontStyle: 'normal',
+        }}
+        onClick={(e) => e.stopPropagation()}>
+          <div style={{ color, fontSize: '11px', letterSpacing: '1px', marginBottom: '6px', fontWeight: 700 }}>{tip.name}</div>
+          <div style={{ color: '#aaa', marginBottom: '6px' }}>{tip.desc}</div>
+          {tip.code && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#9cdcfe', marginTop: '8px', padding: '6px 8px', background: '#070712', borderRadius: '4px', border: '1px solid #1a1a2a' }}>{tip.code}</div>}
+          {tip.units && <div style={{ fontSize: '10px', color: '#555', marginTop: '6px' }}>Единицы: <span style={{ color: '#888' }}>{tip.units}</span></div>}
+        </span>
+      )}
+    </span>
+  )
+}
+
+const OscillatorFormula = () => (
+  <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '32px 20px', margin: '24px 0', textAlign: 'center', overflow: 'visible' }}>
+    <div style={{ fontSize: '9px', color: '#333', letterSpacing: '3px', marginBottom: '20px' }}>УРАВНЕНИЕ ДВИЖЕНИЯ ПЕДАЛЕЙ В РАВНОВЕСИИ</div>
+    <div style={{ fontSize: '28px', lineHeight: 1.8, display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+      <SymbolTip label="θ̈" mono={false} color="#ff9933" tip={{
+        name: 'θ̈ — угловое ускорение',
+        desc: 'Вторая производная угла по времени. Физически: как быстро меняется угловая скорость. В прошивке явно не хранится — вычисляется неявно через разницу rate между двумя ISR.',
+        units: 'рад / с²',
+      }} />
+      <span style={{ color: '#555' }}>+</span>
+      <SymbolTip label="k_d" mono={false} color="#ff9933" tip={{
+        name: 'k_d — коэффициент демпфирования',
+        desc: 'Определяет, как сильно контур сопротивляется угловой скорости. В EUC World подписан как Damping (подхват). В RAM лежит по адресу 0x200000CE как uint16.',
+        code: 'EUC_Balance_Kd  // +0x2E',
+        units: 'безразмерный коэффициент',
+      }} />
+      <SymbolTip label=" · " mono={true} color="#555" tip={{ name: '·', desc: 'Умножение.', }} />
+      <SymbolTip label="θ̇" mono={false} color="#33ff99" tip={{
+        name: 'θ̇ — угловая скорость',
+        desc: 'Первая производная угла по времени. Физически: как быстро педали уходят из-под ног. В прошивке приходит из гироскопа после калибровки bias, упакована в младшие 16 бит imu_pitch_packed.',
+        code: 'motor_state.imu_pitch_rate_x10',
+        units: 'рад / с (или °/с × 10 в прошивке)',
+      }} />
+      <span style={{ color: '#555' }}>+</span>
+      <SymbolTip label="k_p" mono={false} color="#00ccff" tip={{
+        name: 'k_p — коэффициент жёсткости',
+        desc: 'Определяет, как агрессивно контур возвращает педали в вертикаль. В EUC World подписан как Hardness (жёсткость). В RAM по адресу 0x200000CC.',
+        code: 'EUC_Balance_Kp  // +0x2C',
+        units: 'безразмерный коэффициент',
+      }} />
+      <SymbolTip label=" · " mono={true} color="#555" tip={{ name: '·', desc: 'Умножение.' }} />
+      <SymbolTip label="θ" mono={false} color="#00ccff" tip={{
+        name: 'θ — угол отклонения',
+        desc: 'Угол наклона педалей от вертикали. Это состояние, которое контур пытается свести к нулю. Приходит из комплементарного фильтра IMU в старших 16 битах слова.',
+        code: 'motor_state.imu_pitch_angle_x100',
+        units: 'рад (или °×100 в прошивке)',
+      }} />
+      <span style={{ color: '#555' }}> = </span>
+      <SymbolTip label="0" mono={true} color="#888" tip={{
+        name: '0 — целевое состояние',
+        desc: 'В правой части ноль — значит: после всех внешних возмущений уравнение стремится к θ = 0, θ̇ = 0. Это и есть математическая форма «вольнобега» — устойчивое равновесие без работы.',
+      }} />
+    </div>
+    <div style={{ fontSize: '11px', color: '#444', marginTop: '18px', maxWidth: '520px', margin: '18px auto 0', lineHeight: 1.6 }}>
+      Наведите на любой символ для расшифровки. Клик — зафиксировать подсказку.
+    </div>
+  </div>
+)
+
 const BalanceSim = () => {
   const canvasRef = useRef(null)
   const [kp, setKp] = useState(280)
@@ -253,6 +357,26 @@ int iq_demand = -(kp_contribution + kd_contribution) / 2;
         <Callout color="#00ccff" label="Hardness и Damping в приложении">
           Kp и Kd живут в SRAM по адресам <InlineCode>0x200000CC</InlineCode> и <InlineCode>0x200000CE</InlineCode>. Когда в EUC World двигается слайдер Hardness, приложение отправляет команду по BLE, обработчик команды пишет новое значение прямо в SRAM — без перекомпиляции, без перезагрузки контроллера. Следующий цикл ISR уже использует новый коэффициент.
         </Callout>
+      </Section>
+
+      <Section title="Математическая форма кручины">
+        <Prose>
+          Если взять формулу PD-регулятора и подставить её в уравнение движения маятника (второй закон Ньютона для вращения), получится каноническое уравнение затухающих колебаний. Это не метафора — это буквально та же самая дифференциальная структура, которая описывает маятник в трение, колебание пружины, и, если верить Пелевину, духовное состояние человека на педалях.
+        </Prose>
+
+        <OscillatorFormula />
+
+        <Callout color="#aa88ff" label="Вольнобег по Пелевину, с точки зрения математики">
+          В «A Sinistra» Пелевин пишет, что «дух крутит кручину, как ноги — педали». Если принять эту метафору всерьёз, то уравнение выше — это её точная запись. <strong>θ</strong> — мирское отклонение, состояние падения. <strong>k_p·θ</strong> — упругая сила кручины, которая всегда тащит обратно в середину. <strong>k_d·θ̇</strong> — демпфирование, гашение собственного движения (то, что в практиках называют «отпустить»). А правая часть — ноль: вольнобег, состояние, в котором не нужно ни возвращать себя к центру, ни гасить себя, потому что ни отклонения, ни движения уже нет.
+        </Callout>
+
+        <Prose>
+          У такой системы есть собственная частота колебаний <InlineCode>ω₀ = √k_p</InlineCode> и коэффициент демпфирования <InlineCode>ζ = k_d / (2·√k_p)</InlineCode>. При <strong>ζ &lt; 1</strong> педали колышутся вокруг нуля с затуханием — колесо чувствуется «живым», отыгрывает неровности. При <strong>ζ ≈ 1</strong> (критическое демпфирование) — любое возмущение гасится плавно, без пере-колебаний. При <strong>ζ &gt; 1</strong> — «ватный» отклик: колесо не колышется, но и не вернётся быстро.
+        </Prose>
+
+        <Prose>
+          В заводских настройках Begode ET Max при k_p = 280 и k_d = 22 получается ω₀ ≈ 16.7 рад/с и ζ ≈ 0.66. Это чуть ниже критического демпфирования — райдер чувствует живой отклик педалей, но без затяжных колебаний.
+        </Prose>
       </Section>
 
       <Section title="Почему нет I-составляющей">

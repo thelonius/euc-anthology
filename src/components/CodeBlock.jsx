@@ -1,4 +1,6 @@
 import { h } from 'preact'
+import { GLOSSARY } from '../glossary/glossary'
+import { Term } from '../glossary/Term'
 
 const KEYWORDS = ['void', 'int', 'short', 'uint', 'float', 'char', 'if', 'else', 'return', 'for', 'while', 'break', 'goto', 'const', 'unsigned', 'struct', 'byte', 'undefined4', 'undefined2', 'undefined1']
 const TYPES_RE = /\b(void|int|short|uint|float|char|byte|unsigned|struct|undefined[124])\b/g
@@ -59,6 +61,14 @@ export const CodeBlock = ({ code, label, address }) => {
   )
 }
 
-export const InlineCode = ({ children }) => (
-  <code style={{ background: '#1a1a2a', border: '1px solid #2a2a3a', borderRadius: '4px', padding: '2px 6px', fontSize: '12px', color: '#9cdcfe', fontFamily: "'JetBrains Mono', monospace" }}>{children}</code>
-)
+const codeStyle = { background: '#1a1a2a', border: '1px solid #2a2a3a', borderRadius: '4px', padding: '2px 6px', fontSize: '12px', color: '#9cdcfe', fontFamily: "'JetBrains Mono', monospace", display: 'inline-block', lineHeight: 1.3 }
+
+export const InlineCode = ({ children }) => {
+  const text = typeof children === 'string' ? children : ''
+  if (text && GLOSSARY[text]) {
+    return <Term term={text} style={codeStyle}>{children}</Term>
+  }
+  return <code style={codeStyle}>{children}</code>
+}
+
+InlineCode.displayName = 'InlineCode'
