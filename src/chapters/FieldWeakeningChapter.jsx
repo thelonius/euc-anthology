@@ -23,126 +23,141 @@ const DQSim = () => {
       const W = canvas.width, H = canvas.height
       ctx.clearRect(0, 0, W, H)
 
-      // Motor parameters (normalized for visualization)
-      const V_bus = 168      // V
-      const R_s = 0.045      // Ohm
-      const L = 0.0002       // H
-      const Psi = 0.025      // flux linkage
-      const pole_pairs = 12
-      const wheel_r = 0.254
-
+      // Pedagogical per-unit model. Numbers are normalised to I_max for clarity.
+      // Real ET Max parameters give a similar geometry but with cluttered scaling.
       const speed_kmh = speedRef.current
-      const omega_mech = (speed_kmh / 3.6) / wheel_r
-      const omega_elec = omega_mech * pole_pairs  // rad/s electrical
+      const speed_norm = Math.min(1, speed_kmh / 90)   // 0..1 over 0..90 km/h
 
-      // Normalized max current
-      const I_max = 400       // A (phase peak)
-      // Voltage limit: |V| <= V_bus/sqrt(3) (for SVPWM)
-      const V_max = V_bus / Math.sqrt(3)
+      // Center of voltage circle in (Id, Iq) plane, units of I_max:
+      // shifts into −Id direction by Ψ/(L·I_max). Fixed value for visual clarity.
+      const v_center_x = -0.40
+      // Voltage circle radius (in I_max units): shrinks linearly with speed.
+      // At 0 km/h huge → no constraint; at 90 km/h ~0.55 → constrains everything.
+      const v_radius = 1.6 - speed_norm * 1.05
 
-      // In DQ: Vd ≈ -ω·L·Iq, Vq ≈ R·Iq + ω·L·Id + ω·Ψ
-      // At max speed without FW: Vq max is limited by V_max
-      // Voltage circle: (R·Id - ω·L·Iq)² + (R·Iq + ω·L·Id + ω·Ψ)² <= V_max²
-      // At higher ω, the center of the voltage-feasible set shifts in -Id direction
-
+      // Geometry of canvas
       const cx = W * 0.5, cy = H * 0.55
-      const scale = Math.min(W, H * 2) * 0.22  // pixels per amp (scaled)
+      const PU = Math.min(W, H) * 0.32   // pixels per unit (1 pu = I_max)
 
-      // Draw axes
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(cx - 200, cy); ctx.lineTo(cx + 200, cy); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(cx, cy - 180); ctx.lineTo(cx, cy + 180); ctx.stroke()
-      ctx.fillStyle = '#888'; ctx.font = '11px Inter'
-      ctx.fillText('Id (flux)', cx + 150, cy - 6)
-      ctx.fillText('Iq (torque)', cx + 6, cy - 160)
-      ctx.fillText('−Id →', cx - 180, cy + 18)
+      const toPx = (x, y) => [cx + x * PU, cy - y * PU]
 
-      // Current limit circle (constant I_max)
-      ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3])
-      ctx.beginPath(); ctx.arc(cx, cy, I_max * scale / 100, 0, Math.PI * 2); ctx.stroke()
+      // Axes
+      ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(40, cy); ctx.lineTo(W - 40, cy); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(cx, 30); ctx.lineTo(cx, H - 50); ctx.stroke()
+
+      // Grid at 0.25 pu intervals
+      ctx.strokeStyle = '#141414'
+      for (const v of [0.25, 0.5, 0.75, 1.0, 1.25]) {
+        ctx.beginPath(); ctx.arc(cx, cy, v * PU, 0, Math.PI * 2); ctx.stroke()
+      }
+
+      // Axis labels
+      ctx.fillStyle = '#999'; ctx.font = '11px Inter, sans-serif'
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+      ctx.fillText('Id (поле)', cx + 8, 28)
+      ctx.fillText('+Id →', W - 80, cy - 8)
+      ctx.fillText('Iq (момент)', cx + 8, 28 + 14); ctx.fillStyle = '#666'
+      ctx.fillText('← −Id (FW)', 40, cy - 8)
+
+      // Tick marks (0.5, 1.0)
+      ctx.fillStyle = '#444'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'center'
+      for (const t of [-1, -0.5, 0.5, 1]) {
+        ctx.fillText(`${t}`, cx + t * PU, cy + 14)
+        ctx.fillText(`${t}`, cx - 14, cy - t * PU)
+      }
+      ctx.fillStyle = '#555'; ctx.fillText('I_max', cx - 30, cy - 1.1 * PU)
+
+      // ─── Current limit circle (radius = 1.0 pu = I_max) ───
+      ctx.strokeStyle = '#ff3366aa'; ctx.lineWidth = 1.8; ctx.setLineDash([5, 4])
+      ctx.beginPath(); ctx.arc(cx, cy, PU, 0, Math.PI * 2); ctx.stroke()
       ctx.setLineDash([])
-      ctx.fillStyle = '#ff336688'
-      ctx.fillText('I_max', cx + I_max * scale / 100 + 4, cy - 4)
+      ctx.fillStyle = '#ff3366'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'
+      ctx.fillText('|I| ≤ I_max', cx + PU * 0.71 + 6, cy - PU * 0.71 - 6)
 
-      // Voltage limit locus: ellipse centered at (-Psi/L, 0) in DQ
-      // Radius scales with V_max / (ω·L)  — shrinks with speed
-      const v_radius = omega_elec > 1 ? V_max / (omega_elec * L) : 9999
-      const v_center_id = -Psi / L   // center shifts into -Id
-      const vr_px = v_radius * scale / 100
+      // ─── Voltage limit circle ───
+      const [vcx_px, vcy_px] = toPx(v_center_x, 0)
+      ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 1.8
+      ctx.beginPath(); ctx.arc(vcx_px, vcy_px, v_radius * PU, 0, Math.PI * 2); ctx.stroke()
+      // Light fill
+      ctx.fillStyle = '#00ccff10'
+      ctx.beginPath(); ctx.arc(vcx_px, vcy_px, v_radius * PU, 0, Math.PI * 2); ctx.fill()
+      // Center marker
+      ctx.fillStyle = '#00ccff'; ctx.beginPath(); ctx.arc(vcx_px, vcy_px, 2, 0, Math.PI * 2); ctx.fill()
+      ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText(`|V| ≤ V_max  (r = ${v_radius.toFixed(2)})`,
+        vcx_px, vcy_px - v_radius * PU - 8)
+      // Center label
+      ctx.fillStyle = '#00ccff88'; ctx.font = '9px Inter, sans-serif'
+      ctx.fillText('центр: −Ψ/L', vcx_px, vcy_px + 14)
 
-      // Voltage circle in DQ plane
-      ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 1.5
-      ctx.beginPath(); ctx.arc(cx + v_center_id * scale / 100, cy, vr_px, 0, Math.PI * 2); ctx.stroke()
-      ctx.fillStyle = '#00ccff88'
-      ctx.fillText(`|V| = V_max/ω·L`, cx + v_center_id * scale / 100 - 40, cy - vr_px - 4)
+      // ─── Determine operating point ───
+      const iq_target = (trqRef.current / 100)   // pu of I_max
+      let id_actual = 0, iq_actual = iq_target
 
-      // Operating point
-      const iq_requested = (trqRef.current / 100) * I_max
-      let id = 0, iq = iq_requested
+      // Distance from voltage-circle centre to (0, iq_target)
+      const dq_dist = Math.sqrt(v_center_x * v_center_x + iq_target * iq_target)
+      const fw_active = fwRef.current && dq_dist > v_radius
 
-      if (fwRef.current && omega_elec > 1) {
-        // Project into voltage circle from current target
-        // Find closest feasible point on/inside voltage circle
-        const dq_dist = Math.sqrt(Math.pow(0 - v_center_id, 2) + Math.pow(iq, 2))
-        if (dq_dist > v_radius) {
-          // Need field weakening: move Id toward center of voltage circle
-          // Project (0, iq) along -Id direction until |(id-center, iq)| == v_radius
-          // (id - center)² + iq² = r²
-          // id = center - sqrt(r² - iq²) if r² > iq²
-          if (v_radius * v_radius > iq * iq) {
-            id = v_center_id + Math.sqrt(v_radius * v_radius - iq * iq)
-            if (id > 0) id = 0
-          } else {
-            iq = v_radius * Math.sign(iq_requested)
-            id = v_center_id
-          }
+      if (fw_active) {
+        // Move along Id direction until inside V-circle. Solve:
+        // (id - v_center_x)² + iq² = v_radius²  →  id = v_center_x − √(v_radius² − iq²)
+        if (v_radius * v_radius > iq_target * iq_target) {
+          id_actual = v_center_x + Math.sqrt(v_radius * v_radius - iq_target * iq_target)
+          // If solution would be > 0 (right of origin), keep at 0 (no FW needed)
+          if (id_actual > 0) id_actual = 0
+        } else {
+          // Voltage circle even smaller than iq target — clamp Iq
+          iq_actual = v_radius * Math.sign(iq_target)
+          id_actual = v_center_x
         }
-      } else if (!fwRef.current && omega_elec > 1) {
-        // Without FW: just limit Vq
-        const v_needed = omega_elec * Psi + omega_elec * L * iq * 0 + 0.045 * iq
-        if (Math.abs(v_needed) > V_max) {
-          iq = iq * V_max / Math.abs(v_needed)
-        }
+      } else if (!fwRef.current && dq_dist > v_radius) {
+        // FW disabled but V-limit still bites → just clamp Iq down
+        iq_actual = Math.min(iq_target, v_radius)   // simplified
       }
 
-      // Also limit by I_max circle
-      const imag = Math.sqrt(id * id + iq * iq)
-      if (imag > I_max) {
-        id = id * I_max / imag
-        iq = iq * I_max / imag
-      }
+      // Clamp to current circle
+      const imag = Math.sqrt(id_actual * id_actual + iq_actual * iq_actual)
+      if (imag > 1) { id_actual /= imag; iq_actual /= imag }
 
-      // Draw requested (target) point
-      const tx = cx + 0 * scale / 100
-      const ty = cy - iq_requested * scale / 100
-      ctx.fillStyle = '#ffcc0044'
-      ctx.beginPath(); ctx.arc(tx, ty, 5, 0, Math.PI * 2); ctx.fill()
-      ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 1
-      ctx.beginPath(); ctx.arc(tx, ty, 8, 0, Math.PI * 2); ctx.stroke()
+      // ─── Target point (yellow ring) ───
+      const [tx_px, ty_px] = toPx(0, iq_target)
+      ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.arc(tx_px, ty_px, 9, 0, Math.PI * 2); ctx.stroke()
+      ctx.fillStyle = '#ffcc0033'
+      ctx.beginPath(); ctx.arc(tx_px, ty_px, 9, 0, Math.PI * 2); ctx.fill()
 
-      // Draw actual operating point
-      const ox = cx + id * scale / 100
-      const oy = cy - iq * scale / 100
-      ctx.fillStyle = '#33ff99'
-      ctx.beginPath(); ctx.arc(ox, oy, 6, 0, Math.PI * 2); ctx.fill()
-      ctx.shadowBlur = 15; ctx.shadowColor = '#33ff99'
-      ctx.beginPath(); ctx.arc(ox, oy, 4, 0, Math.PI * 2); ctx.fill()
-      ctx.shadowBlur = 0
-
-      // Arrow from target to actual
-      if (Math.abs(id) > 2) {
-        ctx.strokeStyle = '#ff9933aa'; ctx.lineWidth = 1; ctx.setLineDash([2, 2])
-        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ox, oy); ctx.stroke()
+      // Arrow target → actual
+      const [ox_px, oy_px] = toPx(id_actual, iq_actual)
+      if (Math.hypot(ox_px - tx_px, oy_px - ty_px) > 6) {
+        ctx.strokeStyle = '#ff9933aa'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3])
+        ctx.beginPath(); ctx.moveTo(tx_px, ty_px); ctx.lineTo(ox_px, oy_px); ctx.stroke()
         ctx.setLineDash([])
       }
 
-      // Labels
-      ctx.fillStyle = '#ffcc00'; ctx.font = '10px Inter'
-      ctx.fillText(`Запрос (Id=0, Iq=${iq_requested.toFixed(0)})`, 12, 20)
+      // Actual operating point (green, glowing)
+      ctx.shadowBlur = 12; ctx.shadowColor = '#33ff99'
       ctx.fillStyle = '#33ff99'
-      ctx.fillText(`Реально: Id=${id.toFixed(0)}, Iq=${iq.toFixed(0)}`, 12, 36)
-      ctx.fillStyle = '#aaa'
-      ctx.fillText(`ω_elec = ${omega_elec.toFixed(0)} rad/s`, 12, 52)
+      ctx.beginPath(); ctx.arc(ox_px, oy_px, 6, 0, Math.PI * 2); ctx.fill()
+      ctx.shadowBlur = 0
+
+      // ─── Status box (top left) ───
+      const id_amps = id_actual * 380, iq_amps = iq_actual * 380
+      const lines = [
+        ['ЗАПРОС', `Id = 0  ·  Iq = ${(iq_target * 380).toFixed(0)} A`, '#ffcc00'],
+        ['РЕАЛЬНО', `Id = ${id_amps.toFixed(0)} A · Iq = ${iq_amps.toFixed(0)} A`, '#33ff99'],
+        ['СКОРОСТЬ', `${speed_kmh} км/ч  (${(speed_norm * 100).toFixed(0)}% макс.)`, '#aaa'],
+        [fw_active ? 'FW АКТИВНО' : (fwRef.current ? 'FW ОЖИДАЕТ' : 'FW ВЫКЛ'),
+          fw_active ? 'отрицательный Id ослабляет поле' :
+          (fwRef.current ? 'V-предел не достигнут' : 'векторный предел игнорируется'),
+          fw_active ? '#ff9933' : '#666'],
+      ]
+      lines.forEach(([label, value, color], i) => {
+        ctx.fillStyle = color; ctx.font = 'bold 9px Inter, sans-serif'; ctx.textAlign = 'left'
+        ctx.fillText(label, 14, 20 + i * 20)
+        ctx.fillStyle = '#888'; ctx.font = '11px JetBrains Mono, monospace'
+        ctx.fillText(value, 80, 20 + i * 20)
+      })
 
       animId = requestAnimationFrame(draw)
     }

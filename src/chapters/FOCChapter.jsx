@@ -109,6 +109,266 @@ const TransformViz = () => {
   )
 }
 
+// Geometric visualization of Clarke and Park transforms.
+// Shows the SAME current vector in three coordinate systems side-by-side.
+const ClarkeParkGeometry = () => {
+  const canvasRef = useRef(null)
+  const [iq, setIq] = useState(150)
+  const [id, setId] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [speed, setSpeed] = useState(1.5)  // rad/s of electrical rotation
+  const stateRef = useRef({ iq: 150, id: 0, paused: false, speed: 1.5, angle: 0 })
+
+  useEffect(() => { stateRef.current.iq = iq }, [iq])
+  useEffect(() => { stateRef.current.id = id }, [id])
+  useEffect(() => { stateRef.current.paused = paused }, [paused])
+  useEffect(() => { stateRef.current.speed = speed }, [speed])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    let animId, lastT = performance.now()
+
+    const arrow = (x1, y1, x2, y2, color, width = 2) => {
+      ctx.strokeStyle = color
+      ctx.lineWidth = width
+      ctx.lineCap = 'round'
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+      const angle = Math.atan2(y2 - y1, x2 - x1)
+      const ah = 8
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.moveTo(x2, y2)
+      ctx.lineTo(x2 - Math.cos(angle - 0.4) * ah, y2 - Math.sin(angle - 0.4) * ah)
+      ctx.lineTo(x2 - Math.cos(angle + 0.4) * ah, y2 - Math.sin(angle + 0.4) * ah)
+      ctx.closePath(); ctx.fill()
+    }
+
+    const loop = (now) => {
+      const dt = Math.min((now - lastT) / 1000, 0.04)
+      lastT = now
+      const s = stateRef.current
+      if (!s.paused) s.angle += s.speed * dt
+      const angle = s.angle
+
+      // Forward Park: from (Id, Iq) rotating frame to (α, β) stationary
+      const cosT = Math.cos(angle), sinT = Math.sin(angle)
+      const alpha = s.id * cosT - s.iq * sinT
+      const beta  = s.id * sinT + s.iq * cosT
+      // Inverse Clarke: from (α, β) to (a, b, c)
+      const ia = alpha
+      const ib = -0.5 * alpha + (Math.sqrt(3) / 2) * beta
+      const ic = -0.5 * alpha - (Math.sqrt(3) / 2) * beta
+
+      const W = canvas.width, H = canvas.height
+      ctx.clearRect(0, 0, W, H)
+
+      const panelW = W / 3
+      const r = Math.min(panelW, H) * 0.35     // base radius for vector scale
+      const SCALE = r / 250                     // px per amp
+
+      // ────── PANEL 1: Phase frame (a, b, c at 120°) ──────
+      const cx1 = panelW * 0.5, cy = H * 0.55
+
+      ctx.fillStyle = '#999'; ctx.font = 'bold 11px Inter, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Фазная (a, b, c)', cx1, 22)
+      ctx.fillStyle = '#444'; ctx.font = '9px Inter, sans-serif'
+      ctx.fillText('три оси · 120° между ними', cx1, 38)
+
+      const phaseAxes = [
+        { angle: -Math.PI / 2,                 color: '#ff3366', label: 'a', val: ia },
+        { angle: -Math.PI / 2 + 2 * Math.PI / 3, color: '#33ff99', label: 'b', val: ib },
+        { angle: -Math.PI / 2 + 4 * Math.PI / 3, color: '#00ccff', label: 'c', val: ic },
+      ]
+      // Faint axes
+      phaseAxes.forEach(p => {
+        ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1; ctx.setLineDash([2, 4])
+        const ex = cx1 + Math.cos(p.angle) * r * 1.2
+        const ey = cy + Math.sin(p.angle) * r * 1.2
+        const ex2 = cx1 + Math.cos(p.angle + Math.PI) * r * 0.4
+        const ey2 = cy + Math.sin(p.angle + Math.PI) * r * 0.4
+        ctx.beginPath(); ctx.moveTo(ex2, ey2); ctx.lineTo(ex, ey); ctx.stroke()
+        ctx.setLineDash([])
+        // Axis label
+        ctx.fillStyle = p.color + 'aa'; ctx.font = 'bold 11px Inter, sans-serif'
+        ctx.fillText(p.label, ex + Math.cos(p.angle) * 14, ey + Math.sin(p.angle) * 14 + 3)
+      })
+      // Projections on each axis
+      phaseAxes.forEach(p => {
+        const len = p.val * SCALE
+        const ex = cx1 + Math.cos(p.angle) * len
+        const ey = cy + Math.sin(p.angle) * len
+        if (Math.abs(p.val) > 1) {
+          arrow(cx1, cy, ex, ey, p.color, 3)
+          ctx.fillStyle = p.color; ctx.font = '10px JetBrains Mono, monospace'
+          ctx.textAlign = 'left'
+          ctx.fillText(`${p.val.toFixed(0)}A`, ex + 6, ey)
+        }
+      })
+
+      // ────── PANEL 2: Stationary frame (α, β) ──────
+      const cx2 = panelW * 1.5
+
+      ctx.fillStyle = '#999'; ctx.font = 'bold 11px Inter, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Стационарная (α, β)', cx2, 22)
+      ctx.fillStyle = '#444'; ctx.font = '9px Inter, sans-serif'
+      ctx.fillText('Clarke · вектор вращается', cx2, 38)
+
+      // Cartesian axes
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(cx2 - r * 1.2, cy); ctx.lineTo(cx2 + r * 1.2, cy); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(cx2, cy - r * 1.1); ctx.lineTo(cx2, cy + r * 1.1); ctx.stroke()
+      ctx.fillStyle = '#666'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'
+      ctx.fillText('α', cx2 + r * 1.2 + 4, cy + 4)
+      ctx.textAlign = 'center'
+      ctx.fillText('β', cx2, cy - r * 1.15)
+
+      // Original phase axes faint underlay (so you see how a aligns with β-axis convention)
+      // Actually a is along +β (top) by convention here.
+      // Vector
+      const ax = cx2 + alpha * SCALE
+      const ay = cy - beta * SCALE
+      // Projections (dotted)
+      ctx.strokeStyle = '#ff993344'; ctx.lineWidth = 1; ctx.setLineDash([3, 3])
+      ctx.beginPath(); ctx.moveTo(ax, cy); ctx.lineTo(ax, ay); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(cx2, ay); ctx.lineTo(ax, ay); ctx.stroke()
+      ctx.setLineDash([])
+      // Axis projections
+      arrow(cx2, cy, ax, cy, '#ff993399', 1.5)   // α component
+      arrow(cx2, cy, cx2, ay, '#ff993399', 1.5)  // β component
+      // Main vector
+      arrow(cx2, cy, ax, ay, '#ff9933', 3)
+      // Labels
+      ctx.fillStyle = '#ff9933'; ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'left'
+      ctx.fillText(`α=${alpha.toFixed(0)}`, ax + 8, cy + (alpha > 0 ? -6 : 14))
+      ctx.fillText(`β=${beta.toFixed(0)}`, cx2 + 6, ay - (beta > 0 ? 6 : -14))
+
+      // ────── PANEL 3: Rotating frame (d, q) ──────
+      const cx3 = panelW * 2.5
+
+      ctx.fillStyle = '#999'; ctx.font = 'bold 11px Inter, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Вращающаяся (d, q)', cx3, 22)
+      ctx.fillStyle = '#444'; ctx.font = '9px Inter, sans-serif'
+      ctx.fillText('Park · вектор стоит', cx3, 38)
+
+      // d-axis: rotates with rotor (angle), q-axis 90° ahead
+      const dAxAngle = -angle    // visual: rotation reversed because canvas y is down
+      const qAxAngle = -angle - Math.PI / 2
+
+      // Faint outer circle (rotor angle indicator)
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(cx3, cy, r * 1.05, 0, Math.PI * 2); ctx.stroke()
+
+      // Rotor angle indicator (small mark on circle)
+      const dx = cx3 + Math.cos(dAxAngle) * r * 1.05
+      const dy = cy + Math.sin(dAxAngle) * r * 1.05
+      ctx.fillStyle = '#ffcc0044'
+      ctx.beginPath(); ctx.arc(dx, dy, 4, 0, Math.PI * 2); ctx.fill()
+
+      // Rotating axes
+      ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 1.5; ctx.setLineDash([2, 4])
+      ctx.beginPath(); ctx.moveTo(cx3, cy); ctx.lineTo(cx3 + Math.cos(dAxAngle) * r * 1.1, cy + Math.sin(dAxAngle) * r * 1.1); ctx.stroke()
+      ctx.strokeStyle = '#33ff99'
+      ctx.beginPath(); ctx.moveTo(cx3, cy); ctx.lineTo(cx3 + Math.cos(qAxAngle) * r * 1.1, cy + Math.sin(qAxAngle) * r * 1.1); ctx.stroke()
+      ctx.setLineDash([])
+      // Axis labels (at axis tips)
+      ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 11px Inter, sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('D', cx3 + Math.cos(dAxAngle) * (r * 1.2), cy + Math.sin(dAxAngle) * (r * 1.2) + 4)
+      ctx.fillStyle = '#33ff99'
+      ctx.fillText('Q', cx3 + Math.cos(qAxAngle) * (r * 1.2), cy + Math.sin(qAxAngle) * (r * 1.2) + 4)
+
+      // Vector components in rotating frame: by definition Id and Iq, constants
+      // Position of vector tip: id * d̂ + iq * q̂
+      const tx = cx3 + s.id * SCALE * Math.cos(dAxAngle) + s.iq * SCALE * Math.cos(qAxAngle)
+      const ty = cy + s.id * SCALE * Math.sin(dAxAngle) + s.iq * SCALE * Math.sin(qAxAngle)
+
+      // Component projections along rotating axes
+      const idEndX = cx3 + s.id * SCALE * Math.cos(dAxAngle)
+      const idEndY = cy + s.id * SCALE * Math.sin(dAxAngle)
+      const iqEndX = cx3 + s.iq * SCALE * Math.cos(qAxAngle)
+      const iqEndY = cy + s.iq * SCALE * Math.sin(qAxAngle)
+
+      ctx.strokeStyle = '#ffcc0066'; ctx.lineWidth = 1; ctx.setLineDash([3, 3])
+      ctx.beginPath(); ctx.moveTo(idEndX, idEndY); ctx.lineTo(tx, ty); ctx.stroke()
+      ctx.strokeStyle = '#33ff9966'
+      ctx.beginPath(); ctx.moveTo(iqEndX, iqEndY); ctx.lineTo(tx, ty); ctx.stroke()
+      ctx.setLineDash([])
+
+      // Component arrows
+      if (Math.abs(s.id) > 1) arrow(cx3, cy, idEndX, idEndY, '#ffcc00bb', 1.5)
+      if (Math.abs(s.iq) > 1) arrow(cx3, cy, iqEndX, iqEndY, '#33ff99bb', 1.5)
+
+      // Main vector (cyan, same as α/β panel — same physical current!)
+      arrow(cx3, cy, tx, ty, '#00ccff', 3)
+
+      // Labels
+      ctx.fillStyle = '#ffcc00'; ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'left'
+      ctx.fillText(`Id=${s.id.toFixed(0)}`, 6 + cx3 - panelW / 2 + 4, H - 28)
+      ctx.fillStyle = '#33ff99'
+      ctx.fillText(`Iq=${s.iq.toFixed(0)}`, 6 + cx3 - panelW / 2 + 4, H - 14)
+
+      // Panel separators
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(panelW, 14); ctx.lineTo(panelW, H - 4); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(panelW * 2, 14); ctx.lineTo(panelW * 2, H - 4); ctx.stroke()
+
+      // Bottom note: rotor angle
+      ctx.fillStyle = '#444'; ctx.font = '9px JetBrains Mono, monospace'; ctx.textAlign = 'center'
+      const angDeg = ((s.angle * 180 / Math.PI) % 360 + 360) % 360
+      ctx.fillText(`угол ротора θ = ${angDeg.toFixed(0)}°`, W / 2, H - 6)
+
+      animId = requestAnimationFrame(loop)
+    }
+    animId = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(animId)
+  }, [])
+
+  return (
+    <div>
+      <canvas ref={canvasRef} width={780} height={280}
+        style={{ width: '100%', height: '280px', background: '#080808', borderRadius: '10px', display: 'block' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '14px', marginTop: '14px', alignItems: 'end' }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <label style={{ fontSize: '10px', color: '#555' }}>Iq (момент)</label>
+            <span style={{ fontSize: '10px', color: '#33ff99', fontWeight: '700', fontFamily: 'JetBrains Mono, monospace' }}>{iq} A</span>
+          </div>
+          <input type="range" min="-300" max="300" step="5" value={iq}
+            onChange={e => setIq(+e.target.value)} style={{ width: '100%', accentColor: '#33ff99' }} />
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <label style={{ fontSize: '10px', color: '#555' }}>Id (поле)</label>
+            <span style={{ fontSize: '10px', color: '#ffcc00', fontWeight: '700', fontFamily: 'JetBrains Mono, monospace' }}>{id} A</span>
+          </div>
+          <input type="range" min="-200" max="200" step="5" value={id}
+            onChange={e => setId(+e.target.value)} style={{ width: '100%', accentColor: '#ffcc00' }} />
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <label style={{ fontSize: '10px', color: '#555' }}>Скорость вращения</label>
+            <span style={{ fontSize: '10px', color: '#00ccff', fontWeight: '700' }}>{speed.toFixed(1)} рад/с</span>
+          </div>
+          <input type="range" min="0" max="6" step="0.1" value={speed}
+            onChange={e => setSpeed(+e.target.value)} style={{ width: '100%', accentColor: '#00ccff' }} />
+        </div>
+        <button onClick={() => setPaused(p => !p)}
+          style={{ padding: '10px 14px', background: paused ? '#ff993322' : '#1a1a1a', border: `1px solid ${paused ? '#ff993344' : '#333'}`, borderRadius: '6px', color: paused ? '#ff9933' : '#888', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+          {paused ? '▶ Старт' : '⏸ Пауза'}
+        </button>
+      </div>
+      <div style={{ marginTop: '14px', fontSize: '11px', color: '#444', lineHeight: 1.7 }}>
+        Один и тот же физический ток показан в трёх системах координат. В фазной (a, b, c) — три синусоиды;
+        в стационарной (α, β) — единый вектор, который вращается со скоростью ротора;
+        в вращающейся (d, q) — этот же вектор, но в системе, которая сама крутится вместе с ротором, и потому вектор стоит на месте. Именно поэтому FOC работает с PI-регулятором — d/q-токи постоянны при постоянной нагрузке.
+      </div>
+    </div>
+  )
+}
+
 export default function FOCChapter() {
   const [showSim, setShowSim] = useState(false)
 
@@ -131,6 +391,10 @@ export default function FOCChapter() {
             <div><span style={{ color: '#ff9933' }}>α/β</span> — преобразование Кларке. Три фазы → два ортогональных тока. Из трёх переменных — две (третья зависима).</div>
             <div><span style={{ color: '#00ccff' }}>D/Q</span> — преобразование Парка. Вращающийся кадр. D и Q — постоянные токи при постоянном режиме.</div>
           </div>
+        </InteractivePanel>
+
+        <InteractivePanel title="Геометрия преобразований Clarke и Park · один вектор, три представления">
+          <ClarkeParkGeometry />
         </InteractivePanel>
 
         <Section title="Математика преобразований">

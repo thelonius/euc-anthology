@@ -197,12 +197,15 @@ const BackEMFSim = () => {
   const [rpm, setRpm] = useState(400)
   const [showNoise, setShowNoise] = useState(true)
   const [mode, setMode] = useState('schematic')  // 'schematic' or 'realistic'
+  const [showAxes, setShowAxes] = useState(false)
   const rpmRef = useRef(400)
   const noiseRef = useRef(true)
   const modeRef = useRef('schematic')
+  const axesRef = useRef(false)
   useEffect(() => { rpmRef.current = rpm }, [rpm])
   useEffect(() => { noiseRef.current = showNoise }, [showNoise])
   useEffect(() => { modeRef.current = mode }, [mode])
+  useEffect(() => { axesRef.current = showAxes }, [showAxes])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -254,6 +257,37 @@ const BackEMFSim = () => {
       ctx.fillStyle = '#1a1a1a'
       ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill()
       ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke()
+
+      // ─── D/Q axes overlay ───
+      if (axesRef.current) {
+        const dAngle = rotorAngleElec        // D along N pole (rotor angle 0)
+        const qAngle = rotorAngleElec - Math.PI / 2   // Q at 90° leading
+        const drawAxis = (angle, label, color, dashed) => {
+          const length = R + 32
+          const ex = cx + Math.cos(angle) * length
+          const ey = cy + Math.sin(angle) * length
+          ctx.strokeStyle = color
+          ctx.lineWidth = 2.5; ctx.lineCap = 'round'
+          if (dashed) ctx.setLineDash([6, 4])
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke()
+          ctx.setLineDash([])
+          const ah = 8
+          ctx.fillStyle = color
+          ctx.beginPath()
+          ctx.moveTo(ex, ey)
+          ctx.lineTo(ex + Math.cos(angle + Math.PI - 0.4) * ah, ey + Math.sin(angle + Math.PI - 0.4) * ah)
+          ctx.lineTo(ex + Math.cos(angle + Math.PI + 0.4) * ah, ey + Math.sin(angle + Math.PI + 0.4) * ah)
+          ctx.closePath(); ctx.fill()
+          const lx = cx + Math.cos(angle) * (length + 14)
+          const ly = cy + Math.sin(angle) * (length + 14)
+          ctx.fillStyle = color
+          ctx.font = 'bold 13px Inter, sans-serif'
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText(label, lx, ly)
+        }
+        drawAxis(dAngle, 'D', '#ffcc00', false)
+        drawAxis(qAngle, 'Q', '#33ff99', true)
+      }
     }
 
     const drawRealistic = (cx, cy, R, rotorR, emfs) => {
@@ -345,6 +379,52 @@ const BackEMFSim = () => {
       ctx.fillStyle = '#444'; ctx.font = '9px JetBrains Mono, monospace'
       ctx.textAlign = 'center'
       ctx.fillText('24P / 27S · 48 магнитов', cx, cy + statorOuter + 36)
+
+      // ─── Optional: D/Q axes overlay ───
+      if (axesRef.current) {
+        // D-axis points along the closest N-pole (one of the magnet pairs).
+        // Magnet 0 (and 1) are N at angle (rotorAngleMech - π/2).
+        // For visual: pick the topmost N pair and draw D from centre through it.
+        const dAngle = rotorAngleMech - Math.PI / 2
+        const qAngle = dAngle - Math.PI / 2   // Q is 90° elec ahead = quarter pole-pair mech
+        // For a 12-pole-pair motor, 90° electrical = 7.5° mechanical. To make the
+        // axes visually distinguishable we draw Q at 90° mechanical from D —
+        // educationally clearer than 7.5°.
+        // (The relationship d⊥q is what matters for the Park transform, not the
+        //  exact mechanical offset which is just a multiple of pole pairs.)
+        const qAngleVisual = dAngle - Math.PI / 2
+
+        const drawAxis = (angle, label, color, dashed) => {
+          const length = statorOuter + 30
+          const ex = cx + Math.cos(angle) * length
+          const ey = cy + Math.sin(angle) * length
+          ctx.strokeStyle = color
+          ctx.lineWidth = 2.5
+          ctx.lineCap = 'round'
+          if (dashed) ctx.setLineDash([6, 4])
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke()
+          ctx.setLineDash([])
+          // Arrowhead
+          const ah = 8
+          const a1 = angle + Math.PI - 0.4
+          const a2 = angle + Math.PI + 0.4
+          ctx.fillStyle = color
+          ctx.beginPath()
+          ctx.moveTo(ex, ey)
+          ctx.lineTo(ex + Math.cos(a1) * ah, ey + Math.sin(a1) * ah)
+          ctx.lineTo(ex + Math.cos(a2) * ah, ey + Math.sin(a2) * ah)
+          ctx.closePath(); ctx.fill()
+          // Label
+          const lx = cx + Math.cos(angle) * (length + 14)
+          const ly = cy + Math.sin(angle) * (length + 14)
+          ctx.fillStyle = color
+          ctx.font = 'bold 13px Inter, sans-serif'
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText(label, lx, ly)
+        }
+        drawAxis(dAngle, 'D', '#ffcc00', false)        // D-axis: solid yellow, along N
+        drawAxis(qAngleVisual, 'Q', '#33ff99', true)   // Q-axis: dashed green, 90° from D
+      }
     }
 
     const loop = (now) => {
@@ -489,10 +569,16 @@ const BackEMFSim = () => {
           <input type="range" min="10" max="1500" step="10" value={rpm} onChange={e => setRpm(+e.target.value)}
             style={{ width: '100%', accentColor: '#00ccff' }} />
         </div>
-        <button onClick={() => setShowNoise(!showNoise)}
-          style={{ padding: '8px 14px', background: showNoise ? '#ff993322' : '#1a1a1a', border: `1px solid ${showNoise ? '#ff993344' : '#333'}`, borderRadius: '6px', color: showNoise ? '#ff9933' : '#666', cursor: 'pointer', fontSize: '10px', fontWeight: '700' }}>
-          {showNoise ? 'Шум включён' : 'Шум выключен'}
-        </button>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={() => setShowAxes(!showAxes)}
+            style={{ padding: '8px 14px', background: showAxes ? '#ffcc0022' : '#1a1a1a', border: `1px solid ${showAxes ? '#ffcc0044' : '#333'}`, borderRadius: '6px', color: showAxes ? '#ffcc00' : '#666', cursor: 'pointer', fontSize: '10px', fontWeight: '700' }}>
+            {showAxes ? 'D/Q видны' : 'Показать D/Q'}
+          </button>
+          <button onClick={() => setShowNoise(!showNoise)}
+            style={{ padding: '8px 14px', background: showNoise ? '#ff993322' : '#1a1a1a', border: `1px solid ${showNoise ? '#ff993344' : '#333'}`, borderRadius: '6px', color: showNoise ? '#ff9933' : '#666', cursor: 'pointer', fontSize: '10px', fontWeight: '700' }}>
+            {showNoise ? 'Шум включён' : 'Шум выключен'}
+          </button>
+        </div>
       </div>
       <div style={{ marginTop: '14px', fontSize: '11px', color: '#444', lineHeight: 1.6 }}>
         {mode === 'schematic'
