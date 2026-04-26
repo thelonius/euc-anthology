@@ -1,5 +1,5 @@
 import { h } from 'preact'
-import { useState } from 'preact/hooks'
+import { useState, useEffect, useRef } from 'preact/hooks'
 import Prologue from './chapters/Prologue'
 import HardwareChapter from './chapters/HardwareChapter'
 import IMUChapter from './chapters/IMUChapter'
@@ -33,11 +33,53 @@ const CHAPTERS = [
   { id: 'hack',       label: 'Глава XIII',subtitle: 'Ремесло',         part: 'Часть V · Практика', component: HackChapter },
 ]
 
+// Read chapter id from URL hash. Format: #<chapter-id> or #<chapter-id>/<section>
+const readChapterFromHash = () => {
+  const raw = (typeof window !== 'undefined' ? window.location.hash : '').replace(/^#/, '')
+  const id = raw.split('/')[0]
+  return CHAPTERS.find(c => c.id === id) ? id : null
+}
+
 export function App() {
-  const [active, setActive] = useState('prologue')
+  const [active, setActive] = useState(() => readChapterFromHash() || 'prologue')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const mainRef = useRef(null)
   const chapter = CHAPTERS.find(c => c.id === active)
   const ActiveComponent = chapter.component
+
+  // Sync URL → state on browser back/forward and external link clicks
+  useEffect(() => {
+    const onHashChange = () => {
+      const id = readChapterFromHash()
+      if (id && id !== active) {
+        setActive(id)
+        if (mainRef.current) mainRef.current.scrollTop = 0
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [active])
+
+  // Sync state → URL when user picks a chapter via sidebar
+  const goTo = (id) => {
+    if (id === active) return
+    setActive(id)
+    const newHash = '#' + id
+    if (window.location.hash !== newHash) {
+      // Use pushState so browser back-button history works
+      history.pushState(null, '', newHash)
+    }
+    if (mainRef.current) mainRef.current.scrollTop = 0
+  }
+
+  const copyLink = () => {
+    const url = window.location.origin + window.location.pathname + '#' + active
+    navigator.clipboard?.writeText(url).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1500)
+    }).catch(() => {})
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#080808', color: '#ccc', fontFamily: "'Inter', sans-serif", overflow: 'hidden' }}>
@@ -65,7 +107,7 @@ export function App() {
             {CHAPTERS.map(c => (
               <div key={c.id}>
                 {c.part && <div className="part-label">{c.part}</div>}
-                <div className={`nav-item ${active === c.id ? 'active' : ''}`} onClick={() => setActive(c.id)}>
+                <div className={`nav-item ${active === c.id ? 'active' : ''}`} onClick={() => goTo(c.id)}>
                   <span className="nav-chapter">{c.label}</span>
                   <span className="nav-title">{c.subtitle}</span>
                 </div>
@@ -86,8 +128,24 @@ export function App() {
             {sidebarOpen ? '←' : '☰'}
           </button>
           <div style={{ fontSize: '11px', color: '#333' }}>{chapter.label} · {chapter.subtitle}</div>
+          <button onClick={copyLink}
+            title="Скопировать ссылку на эту главу"
+            style={{
+              marginLeft: 'auto',
+              padding: '6px 12px',
+              background: linkCopied ? '#33ff9922' : 'transparent',
+              border: `1px solid ${linkCopied ? '#33ff9944' : '#222'}`,
+              borderRadius: '6px',
+              color: linkCopied ? '#33ff99' : '#555',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontFamily: 'inherit',
+              transition: 'all 0.15s',
+            }}>
+            {linkCopied ? '✓ Скопировано' : '🔗 Ссылка'}
+          </button>
         </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div ref={mainRef} style={{ flex: 1, overflow: 'auto' }}>
           <ActiveComponent />
         </div>
       </main>

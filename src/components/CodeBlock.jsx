@@ -55,7 +55,19 @@ export const CodeBlock = ({ code, label, address }) => {
         {address && <span style={{ fontSize: '10px', color: '#2a4a6a', fontFamily: 'monospace' }}>{address}</span>}
       </div>
       <pre style={{ padding: '20px', fontSize: '12.5px', lineHeight: 1.7, overflowX: 'auto', margin: 0 }}>
-        {tokens.map((t, i) => <span key={i} style={{ color: t.color }}>{t.text}</span>)}
+        {tokens.map((t, i) => {
+          // If this token's text is in the glossary, wrap with hover-tooltip span
+          // while preserving the syntax-highlight color
+          if (GLOSSARY[t.text]) {
+            return (
+              <Term key={i} term={t.text} style={{
+                color: t.color,
+                borderBottom: `1px dotted ${t.color}66`,
+              }}>{t.text}</Term>
+            )
+          }
+          return <span key={i} style={{ color: t.color }}>{t.text}</span>
+        })}
       </pre>
     </div>
   )
