@@ -12,7 +12,7 @@ export const ChapterLayout = ({ eyebrow, title, subtitle, children }) => (
 
 export const Section = ({ title, children }) => (
   <section style={{ marginBottom: '56px' }}>
-    {title && <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#eee', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #1a1a1a' }}>{title}</h2>}
+    {title && <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#eee', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #1a1a1a' }}>{wrapTerms(title)}</h2>}
     {children}
   </section>
 )
@@ -30,7 +30,7 @@ export const Callout = ({ color = '#00ccff', label, children }) => (
 
 export const InteractivePanel = ({ title, children }) => (
   <div style={{ background: '#0e0e0e', border: '1px solid #1e1e1e', borderRadius: '16px', padding: '28px', margin: '32px 0' }}>
-    {title && <div style={{ fontSize: '10px', color: '#444', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '20px' }}>{title}</div>}
+    {title && <div style={{ fontSize: '10px', color: '#444', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '20px' }}>{wrapTerms(title)}</div>}
     {children}
   </div>
 )
