@@ -255,8 +255,9 @@ make HW_SOURCE=hwconf/hw_60.c HW_HEADER=hwconf/hw_60.h upload
           Антология — точка входа, а не исчерпывающий справочник. Для глубокого погружения:
         </Prose>
         <ul style={{ color: '#aaa', fontSize: '15px', lineHeight: 1.9, paddingLeft: '20px' }}>
+          <li><strong style={{ color: '#eee' }}>Ю. Н. Калачёв · «SimInTech: моделирование в электроприводе»</strong> — русскоязычный учебник для практиков. Геометрический вывод формул Кларк/Парк, БКПС, алгоритмы ШИМ, готовые SimInTech-модели PMSM, БДПТ и АД. Доступен бесплатно: <code>SimInTech.ru</code>.</li>
           <li><strong style={{ color: '#eee' }}>ST Application Notes</strong> — AN4013 (FOC), AN5325 (field weakening), AN4642 (ADC+TIM synchronization). Официальная документация от производителя STM32.</li>
-          <li><strong style={{ color: '#eee' }}>Book: Krause, «Analysis of Electric Machinery»</strong> — классика по моделям электрических машин, включая PMSM и FOC с математической строгостью.</li>
+          <li><strong style={{ color: '#eee' }}>Krause · «Analysis of Electric Machinery»</strong> — англоязычная классика. Модели электрических машин, включая PMSM и FOC, с полной математической строгостью.</li>
           <li><strong style={{ color: '#eee' }}>VESC source</strong> (github.com/vedderb/bldc) — реальная production-прошивка с комментариями, от которой можно учиться архитектуре.</li>
           <li><strong style={{ color: '#eee' }}>EUC forums</strong> — electricunicycle.org, EUC World Discord. Там сидят люди, которые уже разбирали конкретные модели и могут подсказать по железу.</li>
           <li><strong style={{ color: '#eee' }}>Ghidra + PyGhidra</strong> — документация Ghidra и скриптинг на Python для автоматизации типовых задач анализа.</li>
