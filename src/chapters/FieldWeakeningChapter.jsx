@@ -206,7 +206,7 @@ const DQSim = () => {
 
 export default function FieldWeakeningChapter() {
   return (
-    <ChapterLayout eyebrow="Глава X" title="Ослабление" subtitle="Field weakening — как колесо едет выше базовой скорости">
+    <ChapterLayout eyebrow="Глава XI" title="Ослабление" subtitle="Field weakening — как колесо едет выше базовой скорости">
       <Section>
         <Prose>
           У мотора ET Max параметры: Kv = 14.5 RPM/V, 12 пар полюсов, радиус колеса 0.254 м. На номинальном напряжении 168 В без нагрузки он должен крутиться со скоростью 168 · 14.5 = 2436 RPM, что на колесе даёт ~38 км/ч. Это так называемая «базовая скорость» — выше неё простой FOC ехать не сможет, потому что back-EMF уравняется с напряжением батареи.

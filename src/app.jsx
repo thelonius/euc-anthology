@@ -10,6 +10,7 @@ import RAMMapChapter from './chapters/RAMMapChapter'
 import BalanceChapter from './chapters/BalanceChapter'
 import FOCChapter from './chapters/FOCChapter'
 import FluxObserverChapter from './chapters/FluxObserverChapter'
+import HFIChapter from './chapters/HFIChapter'
 import FieldWeakeningChapter from './chapters/FieldWeakeningChapter'
 import ThermalChapter from './chapters/ThermalChapter'
 import TelemetryChapter from './chapters/TelemetryChapter'
@@ -27,10 +28,11 @@ const CHAPTERS = [
   { id: 'balance',    label: 'Глава VII', subtitle: 'Равновесие',      part: 'Часть III · Управление', component: BalanceChapter },
   { id: 'foc',        label: 'Глава VIII',subtitle: 'Поток',           part: null,             component: FOCChapter },
   { id: 'observer',   label: 'Глава IX',  subtitle: 'Наблюдатель',     part: null,             component: FluxObserverChapter },
-  { id: 'fw',         label: 'Глава X',   subtitle: 'Ослабление',      part: null,             component: FieldWeakeningChapter },
-  { id: 'thermal',    label: 'Глава XI',  subtitle: 'Тепло',           part: 'Часть IV · Границы', component: ThermalChapter },
-  { id: 'telemetry',  label: 'Глава XII', subtitle: 'Голос',           part: null,             component: TelemetryChapter },
-  { id: 'hack',       label: 'Глава XIII',subtitle: 'Ремесло',         part: 'Часть V · Практика', component: HackChapter },
+  { id: 'hfi',        label: 'Глава X',   subtitle: 'Инжекция',        part: null,             component: HFIChapter },
+  { id: 'fw',         label: 'Глава XI',  subtitle: 'Ослабление',      part: null,             component: FieldWeakeningChapter },
+  { id: 'thermal',    label: 'Глава XII', subtitle: 'Тепло',           part: 'Часть IV · Границы', component: ThermalChapter },
+  { id: 'telemetry',  label: 'Глава XIII',subtitle: 'Голос',           part: null,             component: TelemetryChapter },
+  { id: 'hack',       label: 'Глава XIV', subtitle: 'Ремесло',         part: 'Часть V · Практика', component: HackChapter },
 ]
 
 // Read chapter id from URL hash. Format: #<chapter-id> or #<chapter-id>/<section>
