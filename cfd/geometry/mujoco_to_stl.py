@@ -217,12 +217,13 @@ def pose_joints(lean_deg, crouch_factor):
       shoulder_R (7)
     """
     lean_rad   = math.radians(lean_deg)
-    # Crouch: hip flexion 0→40°, knee flexion 0→35°, ankle adjustment
-    hip_flex   = math.radians(crouch_factor * 40)
-    knee_flex  = math.radians(crouch_factor * 35)
-    ankle_adj  = math.radians(crouch_factor * -10)
-    # Shoulder: arms forward as rider tucks
-    shoulder   = math.radians(-30 - crouch_factor * 50)
+    # Tuck posture: hip flexes 0→65°, knee flexes 0→70° (keeps rider compact),
+    # ankle dorsiflexes to compensate, arms tuck forward and down
+    hip_flex   = math.radians(crouch_factor * 65)
+    knee_flex  = math.radians(crouch_factor * 70)   # strong knee bend keeps CoM over wheel
+    ankle_adj  = math.radians(crouch_factor * 15)   # dorsiflex (positive = toes up)
+    # Shoulder: arms swing forward+down into tuck (aero position)
+    shoulder   = math.radians(-20 - crouch_factor * 110)
 
     return {
         'slide_x':    0.0,
