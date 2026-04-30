@@ -15,6 +15,7 @@ import FieldWeakeningChapter from './chapters/FieldWeakeningChapter'
 import ThermalChapter from './chapters/ThermalChapter'
 import TelemetryChapter from './chapters/TelemetryChapter'
 import HackChapter from './chapters/HackChapter'
+import DragChapter from './chapters/DragChapter'
 import './app.css'
 
 const CHAPTERS = [
@@ -33,6 +34,7 @@ const CHAPTERS = [
   { id: 'thermal',    label: 'Глава XII', subtitle: 'Тепло',           part: 'Часть IV · Границы', component: ThermalChapter },
   { id: 'telemetry',  label: 'Глава XIII',subtitle: 'Голос',           part: null,             component: TelemetryChapter },
   { id: 'hack',       label: 'Глава XIV', subtitle: 'Ремесло',         part: 'Часть V · Практика', component: HackChapter },
+  { id: 'aero',       label: 'Глава XV',  subtitle: 'Сопротивление',   part: 'Часть VI · Скорость', component: DragChapter },
 ]
 
 // Read chapter id from URL hash. Format: #<chapter-id> or #<chapter-id>/<section>
