@@ -1,0 +1,249 @@
+<mujoco model="euc_scene">
+  <!--
+    EUC + Rider — sagittal plane simulation
+
+    Coordinate system: X=forward, Z=up, Y=right (right-hand rule)
+    Chassis origin at wheel axle = 0.254 m above ground.
+
+    EUC body layout:
+      Single box body between rider's legs (not three separate pieces).
+      Tire protrudes below the box bottom (visible as half-wheel).
+      Pedals extend left/right at body bottom.
+      Ankle pads: rubber cylinders on front face at shin level —
+        rider's lower shin presses here when pushing toes down to accelerate.
+        This is the primary force-transfer mechanism during hard acceleration.
+
+    Rider kinematic chain:
+      chassis → foot [rigid, stands on pedal]
+                  └── shin  [ankle joint]
+                        └── thigh [knee joint]
+                              └── torso [hip joint]
+                                    ├── upper_arm_L [shoulder_L]
+                                    └── upper_arm_R [shoulder_R]
+
+    Contact physics:
+      shin_geom ↔ ankle_pad_L/R : engages at ~17° lean
+        When rider pushes toes down → shin presses pad → reaction accelerates EUC.
+      tire ↔ ground : rolling traction.
+
+    Actuator index map:
+      0  drive_motor    (wheel torque; clipped by MotorModel in Python)
+      1  ankle_ctrl     (shin angle relative to platform)
+      2  knee_ctrl
+      3  hip_ctrl
+      4  shoulder_L_ctrl
+      5  shoulder_R_ctrl
+
+    Reference: Sherman S / KS-S22 class, 20" wheel, ~100 kg system
+  -->
+
+  <compiler angle="degree" meshdir="meshes" autolimits="true"/>
+  <option gravity="0 0 -9.81" timestep="0.001" integrator="RK4"/>
+
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+    <global offwidth="1920" offheight="1080"/>
+  </visual>
+
+  <default>
+    <geom friction="0.8 0.01 0.01" condim="3"/>
+    <joint armature="0.01" damping="2"/>
+  </default>
+
+  <contact>
+    <!--
+      Sagittal-plane model: rider chain is centred at y=0, same as wheel.
+      In reality legs straddle the wheel — exclude all wheel↔rider contacts.
+      Chassis↔shin excluded too (too many spurious hits from body/battery geoms);
+      ankle pads re-enabled explicitly as the only intended chassis↔shin contact.
+    -->
+    <exclude body1="wheel" body2="foot"/>
+    <exclude body1="wheel" body2="shin"/>
+    <exclude body1="wheel" body2="thigh"/>
+    <exclude body1="wheel" body2="torso"/>
+    <exclude body1="wheel" body2="upper_arm_L"/>
+    <exclude body1="wheel" body2="upper_arm_R"/>
+    <exclude body1="wheel" body2="forearm_L"/>
+    <exclude body1="wheel" body2="forearm_R"/>
+    <exclude body1="chassis" body2="shin"/>
+    <pair geom1="shin_geom" geom2="ankle_pad_L"/>
+    <pair geom1="shin_geom" geom2="ankle_pad_R"/>
+  </contact>
+
+  <worldbody>
+    <light pos="2 -2 5" dir="-0.3 0.5 -1" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
+    <light pos="-2 2 5" dir=" 0.3 -0.5 -1" diffuse="0.5 0.5 0.5"/>
+
+    <geom name="ground" type="plane" size="500 5 0.1"
+          friction="1.6 0.005 0.005" rgba="0.55 0.55 0.55 1" condim="3"/>
+
+    <!-- ================================================================
+         EUC CHASSIS   (origin = wheel axle, 0.254 m above ground)
+         ================================================================ -->
+    <body name="chassis" pos="0 0 0.254">
+      <joint name="slide_x" type="slide" axis="1 0 0" damping="0" armature="0"/>
+      <joint name="tilt"    type="hinge" axis="0 1 0" range="-65 65" damping="2"/>
+
+      <!-- ---- MAIN BODY: single box sitting above axle ----
+           Spans z = 0..390 mm above axle (centre at +195 mm).
+           Width 176 mm, depth 190 mm — fits between rider's legs. -->
+      <geom name="main_body" type="box"
+            pos="0 0 0.195" size="0.095 0.088 0.195"
+            mass="22" rgba="0.13 0.13 0.14 1"/>
+
+      <!-- Battery: heavy, low, centred near axle for low CoM -->
+      <geom name="battery" type="box"
+            pos="0 0 0.055" size="0.078 0.075 0.068"
+            mass="8" rgba="0.18 0.20 0.55 1"/>
+
+      <!-- Top trim / handle area -->
+      <geom name="top_cap" type="box"
+            pos="0 0 0.375" size="0.068 0.060 0.018"
+            mass="1" rgba="0.22 0.22 0.22 1"/>
+
+      <!-- ---- PEDALS: at body bottom, extend sideways ----
+           Top surface sits 3 mm below axle so pedal_top ≈ z = −0.003 (chassis).
+           In world: 0.254 − 0.003 = 0.251 m — about shin-height above tyre contact. -->
+      <geom name="pedal_L" type="box"
+            pos="0 -0.163 -0.016" size="0.130 0.060 0.013"
+            mass="0.5" rgba="0.38 0.38 0.38 1"/>
+      <geom name="pedal_R" type="box"
+            pos="0  0.163 -0.016" size="0.130 0.060 0.013"
+            mass="0.5" rgba="0.38 0.38 0.38 1"/>
+
+      <!-- ---- ANKLE PADS: rubber cylinders on REAR face of body ----
+           During forward lean: rider's calf presses BACKWARD against these pads.
+           EUC tilts forward → rear pad pushes calf/shin forward = accelerates rider.
+           Geometry: at x=−0.095 (rear face), z=0.185 (120 mm above ankle joint).
+           Contact with shin_geom engages at ~17° chassis lean (shin vertical in world). -->
+      <geom name="ankle_pad_L" type="cylinder"
+            pos="-0.095 -0.035 0.185" euler="0 90 0" size="0.025 0.040"
+            mass="0.1" rgba="0.62 0.28 0.08 1"/>
+      <geom name="ankle_pad_R" type="cylinder"
+            pos="-0.095  0.035 0.185" euler="0 90 0" size="0.025 0.040"
+            mass="0.1" rgba="0.62 0.28 0.08 1"/>
+
+      <!-- ---- WHEEL (hub motor) ---- -->
+      <body name="wheel" pos="0 0 0">
+        <joint name="wheel_spin" type="hinge" axis="0 1 0"
+               damping="0.3" armature="0.15"/>
+        <!-- fromto along Y = wheel axis, so cylinder axis = Y regardless of wheel_spin.
+             Bottom of tire touches ground: chassis z=0.254, radius=0.254 → world z=0 ✓ -->
+        <geom name="tire" type="cylinder" fromto="0 -0.052 0  0 0.052 0"
+              size="0.254" mass="4.5" rgba="0.08 0.08 0.08 1"
+              friction="1.8 0.005 0.005" condim="3"/>
+        <geom name="rim"  type="cylinder" fromto="0 -0.040 0  0 0.040 0"
+              size="0.190" mass="1.5" rgba="0.72 0.72 0.72 1"/>
+      </body>
+
+      <!-- ================================================================
+           RIDER KINEMATIC CHAIN
+
+           Ankle height: pedal_top(−3mm) + foot_thickness(40mm)
+                         + ankle_clearance(28mm) ≈ 65mm above axle.
+           Foot body origin placed at ankle joint position.
+           ================================================================ -->
+
+      <!-- FOOT: rigid child of chassis (no joint — stands on pedal).
+           The foot moves exactly with the EUC. Ankle joint is on shin,
+           allowing the shin to rotate relative to the foot/platform.
+           Sagittal model: single central foot at y=0.            -->
+      <body name="foot" pos="0 0 0.065">
+
+        <!-- Foot shape: heel 85 mm behind ankle, toe 155 mm forward,
+             bottom 40 mm below ankle joint.
+             Bottom z = 0.065 − 0.040 − 0.028 = −0.003 (chassis) ≈ pedal top ✓ -->
+        <geom name="foot_geom" type="capsule"
+              fromto="-0.085 0 -0.040  0.155 0 -0.040"
+              size="0.028" mass="2.0" rgba="0.62 0.52 0.42 1"/>
+
+        <!-- SHIN: ankle joint — shin rotates relative to foot/EUC platform.
+             Positive angle = shin tilts forward (dorsiflexion, toes up).
+             Negative = plantarflexion (toes down, activates ankle_pad). -->
+        <body name="shin" pos="0 0 0">
+          <joint name="ankle" type="hinge" axis="0 1 0"
+                 range="-30 25" damping="10" armature="0.02"/>
+          <geom name="shin_geom" type="capsule"
+                fromto="0 0 0  0 0 0.43"
+                size="0.037" mass="3.5" rgba="0.62 0.54 0.44 1"/>
+          <geom name="kneecap" type="sphere"
+                pos="0.025 0 0.43" size="0.038"
+                mass="0" rgba="0.55 0.45 0.35 1"/>
+
+          <!-- THIGH: knee joint at top of shin (430 mm above ankle) -->
+          <body name="thigh" pos="0 0 0.43">
+            <joint name="knee" type="hinge" axis="0 1 0"
+                   range="-135 5" damping="18" armature="0.05"/>
+            <geom name="thigh_geom" type="capsule"
+                  fromto="0 0 0  0 0 0.42"
+                  size="0.055" mass="9.5" rgba="0.57 0.47 0.40 1"/>
+
+            <!-- TORSO: hip joint at top of thigh. Carries head mass. -->
+            <body name="torso" pos="0 0 0.42">
+              <joint name="hip" type="hinge" axis="0 1 0"
+                     range="-35 105" damping="30" armature="0.08"/>
+              <geom name="torso_geom" type="capsule"
+                    fromto="0 0 0  0 0 0.50"
+                    size="0.115" mass="35" rgba="0.30 0.38 0.58 1"/>
+              <geom name="head" type="sphere"
+                    pos="0 0 0.60" size="0.095"
+                    mass="5" rgba="0.82 0.72 0.62 1"/>
+
+              <!-- LEFT ARM -->
+              <body name="upper_arm_L" pos="0 -0.17 0.47">
+                <joint name="shoulder_L" type="hinge" axis="0 1 0"
+                       range="-160 90" damping="5" armature="0.01"/>
+                <geom type="capsule" fromto="0 0 0  0 0 -0.30"
+                      size="0.030" mass="1.8" rgba="0.30 0.38 0.58 1"/>
+                <body name="forearm_L" pos="0 0 -0.30">
+                  <geom type="capsule" fromto="0 0 0  0.05 0 -0.27"
+                        size="0.025" mass="1.2" rgba="0.30 0.38 0.58 1"/>
+                </body>
+              </body>
+
+              <!-- RIGHT ARM -->
+              <body name="upper_arm_R" pos="0 0.17 0.47">
+                <joint name="shoulder_R" type="hinge" axis="0 1 0"
+                       range="-160 90" damping="5" armature="0.01"/>
+                <geom type="capsule" fromto="0 0 0  0 0 -0.30"
+                      size="0.030" mass="1.8" rgba="0.30 0.38 0.58 1"/>
+                <body name="forearm_R" pos="0 0 -0.30">
+                  <geom type="capsule" fromto="0 0 0  0.05 0 -0.27"
+                        size="0.025" mass="1.2" rgba="0.30 0.38 0.58 1"/>
+                </body>
+              </body>
+
+            </body>  <!-- /torso -->
+          </body>    <!-- /thigh -->
+        </body>      <!-- /shin -->
+      </body>        <!-- /foot -->
+
+    </body>  <!-- /chassis -->
+  </worldbody>
+
+  <actuator>
+    <motor    name="drive_motor"     joint="wheel_spin"
+              gear="1" ctrllimited="true" ctrlrange="-120 120"/>
+    <position name="ankle_ctrl"      joint="ankle"
+              kp="250" ctrllimited="true" ctrlrange="-0.52 0.44"/>
+    <position name="knee_ctrl"       joint="knee"
+              kp="600" ctrllimited="true" ctrlrange="-2.35 0.09"/>
+    <position name="hip_ctrl"        joint="hip"
+              kp="900" ctrllimited="true" ctrlrange="-0.61 1.83"/>
+    <position name="shoulder_L_ctrl" joint="shoulder_L"
+              kp="120" ctrllimited="true" ctrlrange="-2.79 1.57"/>
+    <position name="shoulder_R_ctrl" joint="shoulder_R"
+              kp="120" ctrllimited="true" ctrlrange="-2.79 1.57"/>
+  </actuator>
+
+  <sensor>
+    <framequat   name="imu_quat"    objtype="body" objname="chassis"/>
+    <frameangvel name="imu_gyro"    objtype="body" objname="chassis"/>
+    <framelinvel name="imu_linvel"  objtype="body" objname="chassis"/>
+    <framepos    name="chassis_pos" objtype="body" objname="chassis"/>
+    <jointvel    name="wheel_vel"   joint="wheel_spin"/>
+    <jointvel    name="tilt_vel"    joint="tilt"/>
+    <jointpos    name="tilt_pos"    joint="tilt"/>
+  </sensor>
+
+</mujoco>
