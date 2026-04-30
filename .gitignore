@@ -17,3 +17,4 @@ dist
 # OS
 Thumbs.db
 .claude/
+__pycache__/
