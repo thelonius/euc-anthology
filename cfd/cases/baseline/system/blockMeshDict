@@ -1,0 +1,86 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  EUC + rider 2-D RANS baseline
+  Domain: rider height H = 1.9 m (EUC + rider)
+  Upstream  10H = 19 m, Downstream 20H = 38 m, Half-width 5H = 9.5 m
+  Free-stream 60 km/h = 16.67 m/s
+\*---------------------------------------------------------------------------*/
+FoamFile { version 2.0; format ascii; class dictionary; object blockMeshDict; }
+
+scale 1;
+
+// Domain extents (metres, 2-D: z span = 0.1 m)
+xMin  -19;   // upstream
+xMax   38;   // downstream
+yMin  -9.5;
+yMax   9.5;
+zMin   0;
+zMax   0.1;
+
+vertices
+(
+    ($xMin $yMin $zMin)   // 0
+    ($xMax $yMin $zMin)   // 1
+    ($xMax $yMax $zMin)   // 2
+    ($xMin $yMax $zMin)   // 3
+    ($xMin $yMin $zMax)   // 4
+    ($xMax $yMin $zMax)   // 5
+    ($xMax $yMax $zMax)   // 6
+    ($xMin $yMax $zMax)   // 7
+);
+
+// Grading: finer near rider (x-centre ~0), coarser at far field
+// x: 120 cells upstream + 240 downstream; y: 120 cells each half
+blocks
+(
+    hex (0 1 2 3 4 5 6 7)
+    (360 240 1)
+    simpleGrading
+    (
+        // x: upstream compress 4:1, downstream expand 1:4
+        (
+            (0.33 0.40 4)    // 0.33 of length, 40% cells, grade 4 (fine→coarse going left)
+            (0.34 0.40 1)    // middle third — uniform
+            (0.33 0.20 0.25) // downstream — coarsen
+        )
+        // y: symmetric compress toward centreline
+        (
+            (0.5 0.5 0.2)
+            (0.5 0.5 5)
+        )
+        1
+    )
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces ( (0 4 7 3) );
+    }
+    outlet
+    {
+        type patch;
+        faces ( (1 2 6 5) );
+    }
+    top
+    {
+        type symmetryPlane;
+        faces ( (3 7 6 2) );
+    }
+    bottom
+    {
+        type symmetryPlane;
+        faces ( (0 1 5 4) );
+    }
+    front
+    {
+        type empty;
+        faces ( (4 5 6 7) );
+    }
+    back
+    {
+        type empty;
+        faces ( (0 3 2 1) );
+    }
+);

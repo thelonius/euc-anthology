@@ -1,0 +1,72 @@
+# OpenStack Magnum / any k8s cluster
+# Runs 36 cases in parallel as indexed job (one pod = one case)
+#
+# Prerequisites:
+#   kubectl create -f pvc.yaml          # shared results PVC
+#   docker push registry.example.com/euc-cfd:latest
+#
+# Submit:  kubectl apply -f k8s_sweep_job.yaml
+# Watch:   kubectl get pods -l job-name=euc-cfd-sweep
+# Results: kubectl exec <any-pod> -- cat /results/euc_sweep/results.csv
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: euc-cfd-sweep
+  labels:
+    app: euc-cfd
+spec:
+  completions: 36          # total cases in sweep_config.yaml (4×3×3)
+  parallelism: 8           # 8 pods run simultaneously
+  completionMode: Indexed  # pod index → CASE_INDEX env
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: euc-cfd
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: openfoam
+        image: registry.example.com/euc-cfd:latest
+        imagePullPolicy: Always
+        env:
+        - name: CASE_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        command:
+        - /bin/bash
+        - -c
+        - |
+          . /opt/openfoam11/etc/bashrc
+          python3 /opt/euc-cfd/cfd/sweep/run_sweep.py \
+            --config /opt/euc-cfd/cfd/sweep/sweep_config.yaml \
+            --ncpu 8 \
+            --out-dir /results/euc_sweep
+        resources:
+          requests:
+            cpu: "8"
+            memory: "16Gi"
+          limits:
+            cpu: "8"
+            memory: "20Gi"
+        volumeMounts:
+        - name: results
+          mountPath: /results
+      volumes:
+      - name: results
+        persistentVolumeClaim:
+          claimName: euc-cfd-results
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: euc-cfd-results
+spec:
+  accessModes:
+  - ReadWriteMany          # shared across pods (Cinder/Ceph RWX or NFS)
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: csi-cephfs   # adjust to your OpenStack storage class

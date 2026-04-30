@@ -1,0 +1,21 @@
+# Parametric sweep configuration for EUC+rider aerodynamics
+# Each combination → 1 OpenFOAM simpleFoam run
+# Total: 4 × 3 × 3 × 1 = 36 cases (±1 h on 8 vCPU pod)
+
+speeds_kmh:   [40, 60, 80, 100]
+lean_deg:     [0, 10, 20]
+crouch:       [0.0, 0.5, 1.0]    # 0=upright, 1=full tuck
+rider_heights: [1.75]            # extend to [1.65, 1.75, 1.85] if needed
+
+# Wing study (separate sweep, activate when baseline validated)
+wing_study:
+  enabled: false
+  chord_m:        [0.15, 0.20, 0.25]
+  span_m:         [0.30, 0.45]
+  aoa_deg:        [-5, 0, 5, 10, 15]   # negative = downforce
+  mount_height_m: [1.5, 1.7]            # above ground
+
+output:
+  base_dir: /results/euc_sweep
+  extract:  [Cd, Cl, CdA]              # written to results.csv after each run
+  save_vtk: false                       # VTK too heavy for full sweep; enable per-point

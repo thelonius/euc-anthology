@@ -1,0 +1,16 @@
+FoamFile { version 2.0; format ascii; class volScalarField; object omega; }
+
+// omega = sqrt(k) / (Cmu^0.25 * L)  →  sqrt(0.0052)/(0.09^0.25 * 0.1) = 1.35 1/s
+dimensions      [ 0 0 -1 0 0 0 0 ];
+internalField   uniform 1.35;
+
+boundaryField
+{
+    inlet       { type fixedValue;    value uniform 1.35; }
+    outlet      { type zeroGradient; }
+    top         { type symmetryPlane; }
+    bottom      { type symmetryPlane; }
+    rider       { type omegaWallFunction; value uniform 1.35; }
+    front       { type empty; }
+    back        { type empty; }
+}

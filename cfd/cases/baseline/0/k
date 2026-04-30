@@ -1,0 +1,16 @@
+FoamFile { version 2.0; format ascii; class volScalarField; object k; }
+
+// k = 1.5*(U*I)^2  →  1.5*(16.667*0.005)^2 = 0.0052 m²/s²
+dimensions      [ 0 2 -2 0 0 0 0 ];
+internalField   uniform 0.0052;
+
+boundaryField
+{
+    inlet       { type fixedValue;    value uniform 0.0052; }
+    outlet      { type zeroGradient; }
+    top         { type symmetryPlane; }
+    bottom      { type symmetryPlane; }
+    rider       { type kqRWallFunction; value uniform 0.0052; }
+    front       { type empty; }
+    back        { type empty; }
+}
