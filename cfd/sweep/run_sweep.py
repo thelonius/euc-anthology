@@ -10,7 +10,7 @@ Usage (K8s/OpenStack — batch mode, single case per pod):
 """
 import argparse, os, shutil, subprocess, csv, math, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / 'geometry'))
-import generate_stl as geom
+import mujoco_to_stl as geom
 import yaml
 
 RHO = 1.225
@@ -121,23 +121,19 @@ def main():
             shutil.rmtree(case_dir)
         shutil.copytree(base_case, case_dir)
 
-        # Generate STL geometry
-        geom_dir = case_dir / 'geometry'
-        geom_dir.mkdir()
-        class GeomArgs:
-            lean   = c['lean']
-            crouch = c['crouch']
-            height = c['height']
-            out    = str(geom_dir)
-        geom.main.__func__ if hasattr(geom.main,'__func__') else None
-        stl_path = geom_dir / f"rider_lean{int(c['lean'])}_crouch{int(c['crouch']*10)}.stl"
-        all_tris = []
-        cyls = geom.rider_cylinders(c['lean'], c['crouch'], c['height'])
-        for cyl in cyls:
-            all_tris.extend(geom.cylinder_triangles(cyl['x'], cyl['y'], cyl['r']))
-        geom.write_stl(stl_path, case_name, all_tris)
-        # Symlink for snappy
-        (case_dir / 'geometry' / f"{case_name}.stl").symlink_to(stl_path)
+        # Generate STL from MuJoCo forward kinematics
+        ts_dir = case_dir / 'constant' / 'triSurface'
+        ts_dir.mkdir(exist_ok=True)
+        import mujoco as mj
+        scene = str(geom.SCENE_XML)
+        model = mj.MjModel.from_xml_path(scene)
+        data  = mj.MjData(model)
+        mj.mj_resetData(model, data)
+        geom.set_pose(model, data, c['lean'], c['crouch'])
+        tris = geom.geoms_to_triangles(model, data)
+        stl_path = ts_dir / 'rider.stl'
+        geom.write_stl_binary(stl_path, tris)
+        print(f"  STL: {len(tris)} tris → {stl_path}")
 
         # Patch speed in boundary conditions
         speed_ms = c['speed_kmh'] / 3.6
