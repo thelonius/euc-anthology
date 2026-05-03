@@ -3,5 +3,5 @@
 // version and shows a "Translation in progress" badge in EN mode.
 
 export const TRANSLATED_TO_EN = new Set([
-  // 'prologue',  // uncomment as each chapter is translated
+  'prologue',
 ])
