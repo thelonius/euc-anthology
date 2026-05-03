@@ -1,9 +1,9 @@
 import { h } from 'preact'
 import { useState, useRef, useEffect } from 'preact/hooks'
-import { GLOSSARY } from './glossary'
+import { useGlossaryEntry } from './glossary'
 
 export const Term = ({ term, children, style: styleOverride }) => {
-  const def = GLOSSARY[term]
+  const def = useGlossaryEntry(term)
   if (!def) return children ?? term
 
   const [hover, setHover] = useState(false)

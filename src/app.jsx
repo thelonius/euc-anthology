@@ -15,6 +15,7 @@ import FieldWeakeningChapter from './chapters/FieldWeakeningChapter'
 import ThermalChapter from './chapters/ThermalChapter'
 import TelemetryChapter from './chapters/TelemetryChapter'
 import HackChapter from './chapters/HackChapter'
+import { LanguageToggle } from './components/LanguageToggle'
 import './app.css'
 
 const CHAPTERS = [
@@ -130,22 +131,24 @@ export function App() {
             {sidebarOpen ? '←' : '☰'}
           </button>
           <div style={{ fontSize: '11px', color: '#333' }}>{chapter.label} · {chapter.subtitle}</div>
-          <button onClick={copyLink}
-            title="Скопировать ссылку на эту главу"
-            style={{
-              marginLeft: 'auto',
-              padding: '6px 12px',
-              background: linkCopied ? '#33ff9922' : 'transparent',
-              border: `1px solid ${linkCopied ? '#33ff9944' : '#222'}`,
-              borderRadius: '6px',
-              color: linkCopied ? '#33ff99' : '#555',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontFamily: 'inherit',
-              transition: 'all 0.15s',
-            }}>
-            {linkCopied ? '✓ Скопировано' : '🔗 Ссылка'}
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <LanguageToggle />
+            <button onClick={copyLink}
+              title="Скопировать ссылку на эту главу"
+              style={{
+                padding: '6px 12px',
+                background: linkCopied ? '#33ff9922' : 'transparent',
+                border: `1px solid ${linkCopied ? '#33ff9944' : '#222'}`,
+                borderRadius: '6px',
+                color: linkCopied ? '#33ff99' : '#555',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}>
+              {linkCopied ? '✓ Скопировано' : '🔗 Ссылка'}
+            </button>
+          </div>
         </div>
         <div ref={mainRef} style={{ flex: 1, overflow: 'auto' }}>
           <ActiveComponent />

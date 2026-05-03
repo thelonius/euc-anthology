@@ -1,5 +1,5 @@
 import { h } from 'preact'
-import { GLOSSARY } from '../glossary/glossary'
+import { GLOSSARY_KEYS } from '../glossary/glossary'
 import { Term } from '../glossary/Term'
 
 const KEYWORDS = ['void', 'int', 'short', 'uint', 'float', 'char', 'if', 'else', 'return', 'for', 'while', 'break', 'goto', 'const', 'unsigned', 'struct', 'byte', 'undefined4', 'undefined2', 'undefined1']
@@ -58,7 +58,7 @@ export const CodeBlock = ({ code, label, address }) => {
         {tokens.map((t, i) => {
           // If this token's text is in the glossary, wrap with hover-tooltip span
           // while preserving the syntax-highlight color
-          if (GLOSSARY[t.text]) {
+          if (GLOSSARY_KEYS.has(t.text)) {
             return (
               <Term key={i} term={t.text} style={{
                 color: t.color,
@@ -77,7 +77,7 @@ const codeStyle = { background: '#1a1a2a', border: '1px solid #2a2a3a', borderRa
 
 export const InlineCode = ({ children }) => {
   const text = typeof children === 'string' ? children : ''
-  if (text && GLOSSARY[text]) {
+  if (text && GLOSSARY_KEYS.has(text)) {
     return <Term term={text} style={codeStyle}>{children}</Term>
   }
   return <code style={codeStyle}>{children}</code>
