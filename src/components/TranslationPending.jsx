@@ -21,7 +21,7 @@ export function TranslationPending() {
         marginBottom: '6px',
         fontWeight: 700,
       }}>
-        {t('Translation in progress')}
+        {t('Перевод в работе')}
       </div>
       <div style={{ fontSize: '13px', color: '#aaa', lineHeight: 1.55 }}>
         {t('Эта глава пока доступна только на русском. Английская версия в работе.')}
