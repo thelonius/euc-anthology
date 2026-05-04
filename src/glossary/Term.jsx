@@ -1,9 +1,11 @@
 import { h } from 'preact'
 import { useState, useRef, useEffect } from 'preact/hooks'
-import { GLOSSARY } from './glossary'
+import { useGlossaryEntry } from './glossary'
+import { useT } from '../i18n'
 
 export const Term = ({ term, children, style: styleOverride }) => {
-  const def = GLOSSARY[term]
+  const def = useGlossaryEntry(term)
+  const t = useT()
   if (!def) return children ?? term
 
   const [hover, setHover] = useState(false)
@@ -134,7 +136,7 @@ export const Term = ({ term, children, style: styleOverride }) => {
           <div style={{ color: '#999', fontSize: '12.5px' }}>{def.desc}</div>
           <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #1a1a1a', display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '9px', color: '#333', letterSpacing: '1.5px' }}>
-              {pinned ? 'ЗАФИКСИРОВАНО · ESC чтобы закрыть' : 'КЛИК ЧТОБЫ ЗАФИКСИРОВАТЬ'}
+              {pinned ? t('ЗАФИКСИРОВАНО · ESC чтобы закрыть') : t('КЛИК ЧТОБЫ ЗАФИКСИРОВАТЬ')}
             </span>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button onClick={copyText} style={{
@@ -145,7 +147,7 @@ export const Term = ({ term, children, style: styleOverride }) => {
                 color: copied ? '#33ff99' : '#888',
                 fontSize: '10px', cursor: 'pointer',
                 fontFamily: 'inherit',
-              }}>{copied ? '✓ скопировано' : 'копировать'}</button>
+              }}>{copied ? t('✓ скопировано') : t('копировать')}</button>
               {pinned && <button onClick={togglePin} style={{
                 padding: '4px 8px',
                 background: 'transparent',

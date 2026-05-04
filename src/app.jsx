@@ -15,6 +15,8 @@ import FieldWeakeningChapter from './chapters/FieldWeakeningChapter'
 import ThermalChapter from './chapters/ThermalChapter'
 import TelemetryChapter from './chapters/TelemetryChapter'
 import HackChapter from './chapters/HackChapter'
+import { LanguageToggle } from './components/LanguageToggle'
+import { useT } from './i18n'
 import './app.css'
 
 const CHAPTERS = [
@@ -47,6 +49,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
   const mainRef = useRef(null)
+  const t = useT()
   const chapter = CHAPTERS.find(c => c.id === active)
   const ActiveComponent = chapter.component
 
@@ -102,16 +105,16 @@ export function App() {
       {sidebarOpen && (
         <aside style={{ width: '220px', minWidth: '220px', background: '#0c0c0c', borderRight: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '28px 20px 24px' }}>
-            <div style={{ fontSize: '10px', color: '#333', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '6px' }}>Антология</div>
-            <div style={{ fontSize: '16px', fontWeight: '900', color: '#fff', lineHeight: 1.2 }}>Моноколесо<br/><span style={{ color: '#00ccff' }}>Изнутри</span></div>
+            <div style={{ fontSize: '10px', color: '#333', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '6px' }}>{t('Антология')}</div>
+            <div style={{ fontSize: '16px', fontWeight: '900', color: '#fff', lineHeight: 1.2 }}>{t('Моноколесо')}<br/><span style={{ color: '#00ccff' }}>{t('Изнутри')}</span></div>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', padding: '0 10px', flex: 1, overflowY: 'auto' }}>
             {CHAPTERS.map(c => (
               <div key={c.id}>
-                {c.part && <div className="part-label">{c.part}</div>}
+                {c.part && <div className="part-label">{t(c.part)}</div>}
                 <div className={`nav-item ${active === c.id ? 'active' : ''}`} onClick={() => goTo(c.id)}>
-                  <span className="nav-chapter">{c.label}</span>
-                  <span className="nav-title">{c.subtitle}</span>
+                  <span className="nav-chapter">{t(c.label)}</span>
+                  <span className="nav-title">{t(c.subtitle)}</span>
                 </div>
               </div>
             ))}
@@ -129,23 +132,25 @@ export function App() {
           <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: '1px solid #222', borderRadius: '6px', color: '#444', cursor: 'pointer', padding: '6px 10px', fontSize: '12px' }}>
             {sidebarOpen ? '←' : '☰'}
           </button>
-          <div style={{ fontSize: '11px', color: '#333' }}>{chapter.label} · {chapter.subtitle}</div>
-          <button onClick={copyLink}
-            title="Скопировать ссылку на эту главу"
-            style={{
-              marginLeft: 'auto',
-              padding: '6px 12px',
-              background: linkCopied ? '#33ff9922' : 'transparent',
-              border: `1px solid ${linkCopied ? '#33ff9944' : '#222'}`,
-              borderRadius: '6px',
-              color: linkCopied ? '#33ff99' : '#555',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontFamily: 'inherit',
-              transition: 'all 0.15s',
-            }}>
-            {linkCopied ? '✓ Скопировано' : '🔗 Ссылка'}
-          </button>
+          <div style={{ fontSize: '11px', color: '#333' }}>{t(chapter.label)} · {t(chapter.subtitle)}</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <LanguageToggle />
+            <button onClick={copyLink}
+              title={t('Скопировать ссылку на эту главу')}
+              style={{
+                padding: '6px 12px',
+                background: linkCopied ? '#33ff9922' : 'transparent',
+                border: `1px solid ${linkCopied ? '#33ff9944' : '#222'}`,
+                borderRadius: '6px',
+                color: linkCopied ? '#33ff99' : '#555',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}>
+              {linkCopied ? t('✓ Скопировано') : t('🔗 Ссылка')}
+            </button>
+          </div>
         </div>
         <div ref={mainRef} style={{ flex: 1, overflow: 'auto' }}>
           <ActiveComponent />
